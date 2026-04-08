@@ -188,45 +188,67 @@ func (h *Handler) handleClients(ctx context.Context, chatID int64) {
 // ── Reviews ───────────────────────────────────────────────────────────────
 
 func (h *Handler) handleReviews(ctx context.Context, chatID int64) {
-    reviews, err := h.repos.Review.GetAllForMaster(ctx, h.inst.Master.ID)
-if err != nil {
-    log.Printf("Error fetching reviews: %v", err)
-	log.Printf("Fetched reviews: %+v", reviews)
-    h.inst.SendMessage(chatID, "Произошла ошибка при получении отзывов. Попробуйте снова.")
-	log.Printf("Error fetching reviews: %v", err)
-    return
-}
-
-    if len(reviews) == 0 {
-        h.inst.SendMessage(chatID, "Отзывов пока нет ⭐")
-		log.Printf("MASTER ID: %d", h.inst.Master.ID)
-        return
-    }
-
-    var sb strings.Builder
-sb.WriteString(fmt.Sprintf("⭐ <b>Отзывы (%d)</b>\n\n", len(reviews)))
-
-
-for i, r := range reviews {
-	if i >= 5 {
-		sb.WriteString(fmt.Sprintf("\n...и ещё %d отзывов", len(reviews)-5))
-		break
+	reviews, err := h.repos.Review.GetAllForMaster(ctx, h.inst.Master.ID)
+	if err != nil {
+		log.Printf("Error fetching reviews: %v", err)
+		h.inst.SendMessage(chatID, "Произошла ошибка при получении отзывов. Попробуйте снова.")
+		return
 	}
 
-	sb.WriteString(fmt.Sprintf(
-		"👤 <b>%s</b>\n🕒 %s\n💬 %s\n",
-		r.ClientName,
-		r.CreatedAt.Format("02 Jan 15:04"),
-		r.Text,
-	))
-
-	if i != len(reviews)-1 && i != 4 {
-		sb.WriteString("\n──────────────\n\n")
+	if len(reviews) == 0 {
+		h.inst.SendMessage(chatID, "Отзывов пока нет ⭐")
+		return
 	}
-}
 
-    // Отправляем собранный текст с отзывами
-    h.inst.SendMessage(chatID, sb.String())
+	// Показываем первую страницу
+	h.sendReviewsPage(ctx, chatID, reviews, 0)
+}
+func (h *Handler) sendReviewsPage(ctx context.Context, chatID int64, reviews []*models.Review, page int) {
+	const pageSize = 5
+
+	start := page * pageSize
+	end := start + pageSize
+	if end > len(reviews) {
+		end = len(reviews)
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("⭐ <b>Отзывы (%d)</b>\n\n", len(reviews)))
+
+	months := map[time.Month]string{
+		time.January: "янв", time.February: "фев", time.March: "мар",
+		time.April: "апр", time.May: "май", time.June: "июн",
+		time.July: "июл", time.August: "авг", time.September: "сен",
+		time.October: "окт", time.November: "ноя", time.December: "дек",
+	}
+
+	for _, r := range reviews[start:end] {
+		date := fmt.Sprintf("%02d %s %02d:%02d",
+			r.CreatedAt.Day(),
+			months[r.CreatedAt.Month()],
+			r.CreatedAt.Hour(),
+			r.CreatedAt.Minute(),
+		)
+		sb.WriteString(fmt.Sprintf(
+			"👤 <b>%s</b>\n🕒 %s\n💬 %s\n──────────────\n",
+			r.ClientName, date, r.Text,
+		))
+	}
+
+	// Кнопки для пагинации
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	if start > 0 {
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("⬅️ Назад", fmt.Sprintf("reviews_page_%d", page-1)),
+		))
+	}
+	if end < len(reviews) {
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Вперед ➡️", fmt.Sprintf("reviews_page_%d", page+1)),
+		))
+	}
+
+	h.inst.SendWithInlineKeyboard(chatID, sb.String(), tgbotapi.NewInlineKeyboardMarkup(buttons...))
 }
 
 // ── Work schedule ─────────────────────────────────────────────────────────
@@ -404,6 +426,17 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		}
 		svcID, _ := strconv.Atoi(svcIDStr)
 		h.showServiceActions(ctx, chatID, svcID)
+		case strings.HasPrefix(data, "reviews_page_"):
+	pageStr := strings.TrimPrefix(data, "reviews_page_")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		return
+	}
+	reviews, err := h.repos.Review.GetAllForMaster(ctx, h.inst.Master.ID)
+	if err != nil || len(reviews) == 0 {
+		return
+	}
+	h.sendReviewsPage(ctx, chatID, reviews, page)
 	case data == "stats_week", data == "stats_month", data == "stats_all":
 		h.handleStats(ctx, chatID)
 	}

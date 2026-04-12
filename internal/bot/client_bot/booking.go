@@ -570,34 +570,34 @@ func (h *Handler) handleLeaveReviewCallback(ctx context.Context, chatID int64, u
 }
 
 func (h *Handler) handleReviewInput(ctx context.Context, msg *tgbotapi.Message, client *models.Client, session *models.SessionState) {
-    text := strings.TrimSpace(msg.Text)
-    if text == "" {
-        return
-    }
+	text := strings.TrimSpace(msg.Text)
+	if text == "" {
+		return
+	}
 
-    // Save review (booking_id 0 for manual reviews)
-    var bookingID *int
+	// Save review (booking_id 0 for manual reviews)
+	var bookingID *int
 
-if session.BookingID != 0 {
-    bookingID = &session.BookingID
-}
+	if session.BookingID != 0 {
+		bookingID = &session.BookingID
+	}
 
-err := h.repos.Review.Create(ctx, h.inst.Master.ID, client.ID, bookingID, text)
-    if err != nil {
-        log.Printf("Failed to save review: %v", err) // Логируем ошибку, если она есть
-        h.inst.SendMessage(msg.Chat.ID, "Произошла ошибка при сохранении отзыва. Попробуйте снова.")
-        return
-    }
+	err := h.repos.Review.Create(ctx, h.inst.Master.ID, client.ID, bookingID, text)
+	if err != nil {
+		log.Printf("Failed to save review: %v", err) // Логируем ошибку, если она есть
+		h.inst.SendMessage(msg.Chat.ID, "Произошла ошибка при сохранении отзыва. Попробуйте снова.")
+		return
+	}
 
-    h.inst.ClearSession(msg.From.ID)
+	h.inst.ClearSession(msg.From.ID)
 
-    keyboard := tgbotapi.NewInlineKeyboardMarkup(
-        tgbotapi.NewInlineKeyboardRow(
-            tgbotapi.NewInlineKeyboardButtonData("📅 Записаться снова", "booking_start"),
-        ),
-    )
-    h.inst.SendWithInlineKeyboard(msg.Chat.ID,
-        "Спасибо за отзыв! 🙏\nМастер обязательно его прочитает 🤍", keyboard)
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("← Назад", "back_to_menu"),
+		),
+	)
+	h.inst.SendWithInlineKeyboard(msg.Chat.ID,
+		"Спасибо за отзыв! 🙏", keyboard)
 }
 
 // ── Consent ───────────────────────────────────────────────────────────────
@@ -616,7 +616,7 @@ func (h *Handler) getAvailableSlots(ctx context.Context, master *models.Master, 
 	}
 
 	startTime := *daySchedule.Start
-endTime := *daySchedule.End
+	endTime := *daySchedule.End
 
 	workStart := time.Date(date.Year(), date.Month(), date.Day(),
 		startTime.Hour(), startTime.Minute(), 0, 0, time.Local)

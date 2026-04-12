@@ -525,8 +525,12 @@ func (h *Handler) handleCancelReason(ctx context.Context, chatID int64, userID i
 		"other_time": "Хочу другое время",
 		"financial":  "Финансовые причины",
 	}[reason]
-
+	booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+	if err != nil {
+		return
+	}
 	h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByClient, reasonText)
+	h.inst.Notifier.NotifyMasterClientCancelled(h.inst.Master.ID, h.inst.Master.MasterTelegramID, booking, reasonText)
 	h.inst.ClearSession(userID)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(

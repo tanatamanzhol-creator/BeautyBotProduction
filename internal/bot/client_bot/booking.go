@@ -545,7 +545,6 @@ func (h *Handler) handleCancelReason(ctx context.Context, chatID int64, userID i
 func (h *Handler) handleReschedule(ctx context.Context, chatID int64, userID int64, data string, client *models.Client) {
 	bookingIDStr := strings.TrimPrefix(data, "reschedule_")
 	bookingID, _ := strconv.Atoi(bookingIDStr)
-
 	booking, _ := h.repos.Booking.GetByID(ctx, bookingID)
 
 	session := h.inst.GetSession(userID)
@@ -556,7 +555,8 @@ func (h *Handler) handleReschedule(ctx context.Context, chatID int64, userID int
 
 	// Cancel old booking
 	h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByClient, "Перенос")
-
+	h.inst.SendMessage(chatID, "Ваша старая запись отменена. Выберите новое время")
+	h.inst.Notifier.NotifyMasterClientCancelled(h.inst.Master.ID, h.inst.Master.MasterTelegramID, booking, "Перенос записи")
 	h.showCalendar(ctx, chatID, userID)
 }
 

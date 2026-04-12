@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"beauty-bot/internal/types"
 	"beauty-bot/internal/models"
+	"beauty-bot/internal/types"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -194,11 +194,6 @@ func (h *Handler) handleReviews(ctx context.Context, chatID int64) {
 		return
 	}
 
-	if len(reviews) == 0 {
-		h.inst.SendMessage(chatID, "Отзывов пока нет ⭐")
-		return
-	}
-
 	// Показываем первую страницу
 	h.sendReviewsPage(ctx, chatID, reviews, 0)
 }
@@ -246,7 +241,6 @@ func (h *Handler) sendReviewsPage(ctx context.Context, chatID int64, reviews []*
 			tgbotapi.NewInlineKeyboardButtonData("Вперед ➡️", fmt.Sprintf("reviews_page_%d", page+1)),
 		))
 	}
-
 	h.inst.SendWithInlineKeyboard(chatID, sb.String(), tgbotapi.NewInlineKeyboardMarkup(buttons...))
 }
 
@@ -400,46 +394,46 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, time.Now().AddDate(0, 0, 1))
 		h.showDaySchedule(ctx, chatID, time.Now().AddDate(0, 0, 1), bookings)
 	case data == "sched_select_month":
-	now := time.Now()
-	var rows [][]tgbotapi.InlineKeyboardButton
-	for i := 0; i < 4; i++ {
-		m := now.AddDate(0, i, 0)
-		monthName := fmt.Sprintf("%s %d", m.Month().String(), m.Year()) // для пользователя
-		callbackData := fmt.Sprintf("sched_select_day_%d-%02d", m.Year(), m.Month()) // для обработки
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(monthName, callbackData),
-		))
-	}
-	h.inst.SendWithInlineKeyboard(chatID, "Выберите месяц:", tgbotapi.NewInlineKeyboardMarkup(rows...))
+		now := time.Now()
+		var rows [][]tgbotapi.InlineKeyboardButton
+		for i := 0; i < 4; i++ {
+			m := now.AddDate(0, i, 0)
+			monthName := fmt.Sprintf("%s %d", m.Month().String(), m.Year())              // для пользователя
+			callbackData := fmt.Sprintf("sched_select_day_%d-%02d", m.Year(), m.Month()) // для обработки
+			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(monthName, callbackData),
+			))
+		}
+		h.inst.SendWithInlineKeyboard(chatID, "Выберите месяц:", tgbotapi.NewInlineKeyboardMarkup(rows...))
 	case strings.HasPrefix(data, "sched_select_day_"):
-	parts := strings.Split(strings.TrimPrefix(data, "sched_select_day_"), "-")
-	year, _ := strconv.Atoi(parts[0])
-	month, _ := strconv.Atoi(parts[1])
+		parts := strings.Split(strings.TrimPrefix(data, "sched_select_day_"), "-")
+		year, _ := strconv.Atoi(parts[0])
+		month, _ := strconv.Atoi(parts[1])
 
-	// Генерируем дни выбранного месяца
-	daysInMonth := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.Local).Day()
-	var rows [][]tgbotapi.InlineKeyboardButton
-	for day := 1; day <= daysInMonth; day++ {
-		callbackData := fmt.Sprintf("sched_day_%d-%02d-%02d", year, month, day)
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("%02d", day), callbackData),
-		))
-	}
-	h.inst.SendWithInlineKeyboard(chatID, "Выберите день:", tgbotapi.NewInlineKeyboardMarkup(rows...))
+		// Генерируем дни выбранного месяца
+		daysInMonth := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.Local).Day()
+		var rows [][]tgbotapi.InlineKeyboardButton
+		for day := 1; day <= daysInMonth; day++ {
+			callbackData := fmt.Sprintf("sched_day_%d-%02d-%02d", year, month, day)
+			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("%02d", day), callbackData),
+			))
+		}
+		h.inst.SendWithInlineKeyboard(chatID, "Выберите день:", tgbotapi.NewInlineKeyboardMarkup(rows...))
 	case strings.HasPrefix(data, "sched_day_"):
-	parts := strings.Split(strings.TrimPrefix(data, "sched_day_"), "-")
-	year, _ := strconv.Atoi(parts[0])
-	month, _ := strconv.Atoi(parts[1])
-	day, _ := strconv.Atoi(parts[2])
+		parts := strings.Split(strings.TrimPrefix(data, "sched_day_"), "-")
+		year, _ := strconv.Atoi(parts[0])
+		month, _ := strconv.Atoi(parts[1])
+		day, _ := strconv.Atoi(parts[2])
 
-	date := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local)
-	bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
-	h.showDaySchedule(ctx, chatID, date, bookings)
+		date := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local)
+		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
+		h.showDaySchedule(ctx, chatID, date, bookings)
 	case strings.HasPrefix(data, "sched_day_"):
-    offset, _ := strconv.Atoi(strings.TrimPrefix(data, "sched_day_"))
-    day := time.Now().AddDate(0, 0, offset)
-    bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, day)
-    h.showDaySchedule(ctx, chatID, day, bookings)
+		offset, _ := strconv.Atoi(strings.TrimPrefix(data, "sched_day_"))
+		day := time.Now().AddDate(0, 0, offset)
+		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, day)
+		h.showDaySchedule(ctx, chatID, day, bookings)
 	case data == "broadcast_1m":
 		h.handleBroadcastSegment(ctx, chatID, userID, 1)
 	case data == "broadcast_2m":
@@ -466,17 +460,19 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		}
 		svcID, _ := strconv.Atoi(svcIDStr)
 		h.showServiceActions(ctx, chatID, svcID)
-		case strings.HasPrefix(data, "reviews_page_"):
-	pageStr := strings.TrimPrefix(data, "reviews_page_")
-	page, err := strconv.Atoi(pageStr)
-	if err != nil {
-		return
-	}
-	reviews, err := h.repos.Review.GetAllForMaster(ctx, h.inst.Master.ID)
-	if err != nil || len(reviews) == 0 {
-		return
-	}
-	h.sendReviewsPage(ctx, chatID, reviews, page)
+	case strings.HasPrefix(data, "reviews_page_"):
+		pageStr := strings.TrimPrefix(data, "reviews_page_")
+		page, err := strconv.Atoi(pageStr)
+		if err != nil {
+			return
+		}
+
+		reviews, err := h.repos.Review.GetAllForMaster(ctx, h.inst.Master.ID)
+		if err != nil || len(reviews) == 0 {
+			return
+		}
+
+		h.sendReviewsPage(ctx, chatID, reviews, page)
 	case data == "stats_week", data == "stats_month", data == "stats_all":
 		h.handleStats(ctx, chatID)
 	}

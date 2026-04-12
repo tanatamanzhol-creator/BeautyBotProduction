@@ -1,8 +1,8 @@
 package client_bot
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -41,11 +41,11 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 	}
 
 	// Проверка на нажатие "Главное меню"
-    if msg.Text == "🏠 Главное меню" {
-        h.inst.ClearSession(userID)         // сброс всех шагов сессии
-        h.sendMainMenu(ctx, msg.Chat.ID, "Вы вернулись в главное меню 👇")
-        return
-    }
+	if msg.Text == "🏠 Главное меню" {
+		h.inst.ClearSession(userID) // сброс всех шагов сессии
+		h.sendMainMenu(ctx, msg.Chat.ID, "Вы вернулись в главное меню 👇")
+		return
+	}
 
 	if msg.IsCommand() {
 		switch msg.Command() {
@@ -77,8 +77,6 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 			h.handleBookingStart(ctx, msg, client)
 		case "📋 Мои записи":
 			h.handleMyBookings(ctx, msg, client)
-		case "⭐ Отзыв":
-			h.handleLeaveReview(ctx, msg, client)
 		case "💬 Вопрос":
 			h.handleQuestion(ctx, msg)
 		default:
@@ -125,12 +123,9 @@ func (h *Handler) sendMainMenu(ctx context.Context, chatID int64, text string) {
 			tgbotapi.NewKeyboardButton("📋 Мои записи"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("⭐ Отзыв"),
 			tgbotapi.NewKeyboardButton("💬 Вопрос"),
+			tgbotapi.NewKeyboardButton("🏠 Главное меню (начать)"), // добавляем кнопку для главного меню
 		),
-		tgbotapi.NewKeyboardButtonRow(
-            tgbotapi.NewKeyboardButton("🏠 Главное меню (начать)"),  // добавляем кнопку для главного меню
-        ),
 	)
 	kb.ResizeKeyboard = true
 	h.inst.SendWithReplyKeyboard(chatID, text, kb)
@@ -146,20 +141,20 @@ func (h *Handler) handlePrivacy(ctx context.Context, msg *tgbotapi.Message) {
 }
 
 func (h *Handler) handleQuestion(ctx context.Context, msg *tgbotapi.Message) {
-    master := h.inst.Master // текущий мастер бота
-    username := master.AdminBotUsername // или ClientBotUsername, если нужно
+	master := h.inst.Master             // текущий мастер бота
+	username := master.AdminBotUsername // или ClientBotUsername, если нужно
 
-    if username == "" {
-        username = fmt.Sprintf("@unknown") // на случай, если не заполнено
-    }
+	if username == "" {
+		username = fmt.Sprintf("@unknown") // на случай, если не заполнено
+	}
 
-    text := fmt.Sprintf(
-        "💬 Напишите сообщение напрямую мастеру в "+
-            "Telegram: %s\nАдрес: %s",
-        username, master.Address,
-    )
+	text := fmt.Sprintf(
+		"💬 Напишите сообщение напрямую мастеру в "+
+			"Telegram: %s\nАдрес: %s",
+		username, master.Address,
+	)
 
-    h.inst.SendMessage(msg.Chat.ID, text)
+	h.inst.SendMessage(msg.Chat.ID, text)
 }
 
 func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {

@@ -575,19 +575,31 @@ func (h *Handler) handleReviewInput(ctx context.Context, msg *tgbotapi.Message, 
 		return
 	}
 
-	// Save review (booking_id 0 for manual reviews)
-	var bookingID *int
-
-	if session.BookingID != 0 {
-		bookingID = &session.BookingID
+	bookingID := session.BookingID
+	if bookingID == 0 {
+		h.inst.SendMessage(msg.Chat.ID, "Ошибка: запись для отзыва не найдена")
+		return
 	}
 
-	err := h.repos.Review.Create(ctx, h.inst.Master.ID, client.ID, bookingID, text)
+	err := h.repos.Review.Create(ctx, h.inst.Master.ID, client.ID, &bookingID, text)
 	if err != nil {
-		log.Printf("Failed to save review: %v", err) // Логируем ошибку, если она есть
+		log.Printf("Failed to save review: %v", err)
 		h.inst.SendMessage(msg.Chat.ID, "Произошла ошибка при сохранении отзыва. Попробуйте снова.")
 		return
 	}
+
+	booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+	if err != nil {
+		log.Printf("GetByID booking error: %v", err)
+		return
+	}
+
+	service, err := h.repos.Service.GetByID(ctx, booking.ServiceID)
+	if err != nil {
+		return
+	}
+
+	h.inst.Notifier.NotifyMasterNewReview(h.inst.Master.ID, h.inst.Master.MasterTelegramID, client.Name, service.Name, text)
 
 	h.inst.ClearSession(msg.From.ID)
 

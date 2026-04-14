@@ -24,8 +24,8 @@ type Master struct {
 }
 
 type DaySchedule struct {
-    Start *time.Time
-    End   *time.Time
+	Start *time.Time
+	End   *time.Time
 }
 
 type WeekSchedule struct {
@@ -72,19 +72,19 @@ type Client struct {
 }
 
 type Booking struct {
-	ID                 int
-	MasterID           int
-	ClientID           int
-	ServiceID          int
-	StartsAt           time.Time
-	EndsAt             time.Time
-	Status             string
-	ConfirmedBy        string
-	CancelReason       string
-	Reminder24hSent    bool
-	Reminder2hSent     bool
-	ReviewRequested    bool
-	CreatedAt          time.Time
+	ID              int
+	MasterID        int
+	ClientID        int
+	ServiceID       int
+	StartsAt        time.Time
+	EndsAt          time.Time
+	Status          string
+	ConfirmedBy     string
+	CancelReason    string
+	Reminder24hSent bool
+	Reminder2hSent  bool
+	ReviewRequested bool
+	CreatedAt       time.Time
 	// Joined fields
 	ClientName         string
 	ClientPhone        string
@@ -117,19 +117,26 @@ type Review struct {
 
 // Booking statuses
 const (
-	StatusPending              = "pending"
-	StatusConfirmed            = "confirmed"
-	StatusCancelledByClient    = "cancelled_by_client"
-	StatusCancelledByMaster    = "cancelled_by_master"
-	StatusCompleted            = "completed"
+	StatusPending           = "pending"
+	StatusConfirmed         = "confirmed"
+	StatusCancelledByClient = "cancelled_by_client"
+	StatusCancelledByMaster = "cancelled_by_master"
+	StatusCompleted         = "completed"
 )
 
 // User session state for multi-step flows
+type PendingService struct {
+	Name        string
+	Price       int
+	DurationMin int
+}
+
 type SessionState struct {
-	Step      string
-	ServiceID int
-	Date      string // "2006-01-02"
-	BookingID int    // for cancellation/reschedule
+	Step           string
+	ServiceID      int
+	Date           string // "2006-01-02"
+	BookingID      int    // for cancellation/reschedule
+	PendingService PendingService
 }
 
 // Steps for client bot
@@ -144,4 +151,8 @@ const (
 	StepConfirmBooking    = "confirm_booking"
 	StepAwaitReview       = "await_review"
 	StepAwaitBroadcastMsg = "await_broadcast_msg"
+	// Steps for admin bot — add service
+	StepAwaitServiceName     = "await_service_name"
+	StepAwaitServicePrice    = "await_service_price"
+	StepAwaitServiceDuration = "await_service_duration"
 )

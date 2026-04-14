@@ -53,6 +53,12 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 	switch session.Step {
 	case models.StepAwaitBroadcastMsg:
 		h.handleBroadcastMessage(ctx, msg, session)
+	case models.StepAwaitServiceName:
+		h.handleNewServiceName(ctx, msg)
+	case models.StepAwaitServicePrice:
+		h.handleNewServicePrice(ctx, msg)
+	case models.StepAwaitServiceDuration:
+		h.handleNewServiceDuration(ctx, msg)
 	default:
 		switch msg.Text {
 		case "📅 Расписание":
@@ -455,7 +461,10 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	case strings.HasPrefix(data, "admin_svc_"):
 		svcIDStr := strings.TrimPrefix(data, "admin_svc_")
 		if svcIDStr == "add" {
-			h.inst.SendMessage(chatID, "Функция добавления услуги в разработке.\nОбратитесь к поддержке.")
+			session := h.inst.GetSession(userID)
+			session.Step = models.StepAwaitServiceName
+			h.inst.SetSession(userID, session)
+			h.inst.SendMessage(chatID, "Введите название услуги:")
 			return
 		}
 		svcID, _ := strconv.Atoi(svcIDStr)
@@ -602,4 +611,64 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (h *Handler) handleNewServiceName(ctx context.Context, msg *tgbotapi.Message) {
+	name := strings.TrimSpace(msg.Text)
+	if name == "" {
+		h.inst.SendMessage(msg.Chat.ID, "Название не может быть пустым. Попробуйте ещё раз:")
+		return
+	}
+	session := h.inst.GetSession(msg.From.ID)
+	session.PendingService.Name = name
+	session.Step = models.StepAwaitServicePrice
+	h.inst.SetSession(msg.From.ID, session)
+	h.inst.SendMessage(msg.Chat.ID, "Введите цену в тенге (только число):")
+}
+
+func (h *Handler) handleNewServicePrice(ctx context.Context, msg *tgbotapi.Message) {
+	price, err := strconv.Atoi(strings.TrimSpace(msg.Text))
+	if err != nil || price <= 0 {
+		h.inst.SendMessage(msg.Chat.ID, "Введите корректную цену (например: 3000):")
+		return
+	}
+	session := h.inst.GetSession(msg.From.ID)
+	session.PendingService.Price = price
+	session.Step = models.StepAwaitServiceDuration
+	h.inst.SetSession(msg.From.ID, session)
+	h.inst.SendMessage(msg.Chat.ID, "Введите длительность в минутах (например: 60):")
+}
+
+func (h *Handler) handleNewServiceDuration(ctx context.Context, msg *tgbotapi.Message) {
+	dur, err := strconv.Atoi(strings.TrimSpace(msg.Text))
+	if err != nil || dur <= 0 {
+		h.inst.SendMessage(msg.Chat.ID, "Введите корректную длительность в минутах:")
+		return
+	}
+	session := h.inst.GetSession(msg.From.ID)
+	session.PendingService.DurationMin = dur
+	p := session.PendingService
+
+	svc := &models.Service{
+		MasterID:    h.inst.Master.ID,
+		Name:        p.Name,
+		Price:       p.Price,
+		DurationMin: dur,
+		IsActive:    true,
+	}
+	_, err = h.repos.Service.Create(ctx, svc)
+	if err != nil {
+		h.inst.SendMessage(msg.Chat.ID, "Ошибка при сохранении. Попробуйте снова.")
+		return
+	}
+
+	session.Step = models.StepIdle
+	session.PendingService = models.PendingService{}
+	h.inst.SetSession(msg.From.ID, session)
+
+	h.inst.SendMessage(msg.Chat.ID, fmt.Sprintf(
+		"✅ Услуга добавлена!\n\n💅 %s\n💰 %d ₸\n⏱ %s",
+		p.Name, p.Price, formatDuration(dur),
+	))
+	h.handleServices(ctx, msg.Chat.ID)
 }

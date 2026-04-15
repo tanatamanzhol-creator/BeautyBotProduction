@@ -80,7 +80,7 @@ func (r *MasterRepo) GetByID(ctx context.Context, id int) (*models.Master, error
 		       mon_start, mon_end, tue_start, tue_end,
 		       wed_start, wed_end, thu_start, thu_end,
 		       fri_start, fri_end, sat_start, sat_end,
-		       sun_start, sun_end, created_at
+		       sun_start, sun_end, COALESCE(latitude, 0), COALESCE(longitude, 0), COALESCE(poi_id, ''), created_at
 		FROM masters WHERE id = $1
 	`, id).Scan(
 		&m.ID, &m.Name, &m.Address, &m.ClientBotToken, &m.AdminBotToken,
@@ -95,6 +95,9 @@ func (r *MasterRepo) GetByID(ctx context.Context, id int) (*models.Master, error
 		&m.Schedule.Fri.Start, &m.Schedule.Fri.End,
 		&m.Schedule.Sat.Start, &m.Schedule.Sat.End,
 		&m.Schedule.Sun.Start, &m.Schedule.Sun.End,
+		&m.Latitude,
+		&m.Longitude,
+		&m.PoiID,
 		&m.CreatedAt,
 	)
 	return m, err

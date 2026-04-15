@@ -21,6 +21,9 @@ type Master struct {
 	CancelLimitHours      int
 	Schedule              WeekSchedule
 	CreatedAt             time.Time
+	Longitude             float64
+	Latitude              float64
+	PoiID                 string
 }
 
 type DaySchedule struct {

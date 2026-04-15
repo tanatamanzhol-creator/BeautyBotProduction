@@ -591,7 +591,8 @@ func formatDateFull(t time.Time) string {
 	days := []string{"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"}
 	months := []string{"", "января", "февраля", "марта", "апреля", "мая", "июня",
 		"июля", "августа", "сентября", "октября", "ноября", "декабря"}
-	return fmt.Sprintf("%s, %d %s", strings.Title(days[t.Weekday()]), t.Day(), months[t.Month()])
+	return fmt.Sprintf("%s, %d %s, %02d:%02d",
+		strings.Title(days[t.Weekday()]), t.Day(), months[t.Month()], t.Hour(), t.Minute())
 }
 
 func formatDuration(minutes int) string {

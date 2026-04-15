@@ -437,6 +437,8 @@ func (h *Handler) notifyMasterNewBooking(ctx context.Context, bookingID int, svc
 // ── Cancellation ──────────────────────────────────────────────────────────
 
 func (h *Handler) handleMyBookings(ctx context.Context, msg *tgbotapi.Message, client *models.Client) {
+	master, _ := h.repos.Master.GetByID(ctx, h.inst.Master.ID)
+
 	bookings, err := h.repos.Booking.GetUpcomingForClient(ctx, h.inst.Master.ID, client.ID)
 	if err != nil || len(bookings) == 0 {
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -444,24 +446,67 @@ func (h *Handler) handleMyBookings(ctx context.Context, msg *tgbotapi.Message, c
 				tgbotapi.NewInlineKeyboardButtonData("📅 Записаться", "booking_start"),
 			),
 		)
-		h.inst.SendWithInlineKeyboard(msg.Chat.ID,
-			"У вас нет предстоящих записей.", keyboard)
+		h.inst.SendWithInlineKeyboard(msg.Chat.ID, "У вас нет предстоящих записей.", keyboard)
 		return
 	}
 
-	var rows [][]tgbotapi.InlineKeyboardButton
+	h.inst.SendMessage(msg.Chat.ID, "Ваши записи:")
+
 	for _, b := range bookings {
-		label := fmt.Sprintf("%s — %s", formatDateFull(b.StartsAt), b.ServiceName)
-		rows = append(rows, []tgbotapi.InlineKeyboardButton{
-			tgbotapi.NewInlineKeyboardButtonData(label, fmt.Sprintf("noop_%d", b.ID)),
-		})
-		rows = append(rows, []tgbotapi.InlineKeyboardButton{
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("cancel_booking_%d", b.ID)),
-			tgbotapi.NewInlineKeyboardButtonData("🔄 Перенести", fmt.Sprintf("reschedule_%d", b.ID)),
-		})
+		endsAt := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
+
+		info := fmt.Sprintf(
+			"📅 %s\n✂️ %s\n👤 %s\n🕐 %02d:%02d — %02d:%02d\n💰 %d ₸",
+			formatDateFull(b.StartsAt),
+			b.ServiceName,
+			master.Name,
+			b.StartsAt.Hour(), b.StartsAt.Minute(),
+			endsAt.Hour(), endsAt.Minute(),
+			b.ServicePrice,
+		)
+
+		var rows [][]tgbotapi.InlineKeyboardButton
+
+		// 1. СНАЧАЛА 2GIS
+		if master.PoiID != "" {
+			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonURL(
+					"🗺 Открыть в 2ГИС",
+					fmt.Sprintf(
+						"https://2gis.kz/pavlodar/geo/%s",
+						master.PoiID,
+					),
+				),
+			))
+		} else if master.Latitude != 0 && master.Longitude != 0 {
+			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonURL(
+					"🗺 Открыть в 2ГИС",
+					fmt.Sprintf(
+						"https://2gis.kz/geo/%f,%f",
+						master.Longitude,
+						master.Latitude,
+					),
+				),
+			))
+		}
+
+		// 2. ПОТОМ действия
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(
+				"❌ Отменить",
+				fmt.Sprintf("cancel_booking_%d", b.ID),
+			),
+			tgbotapi.NewInlineKeyboardButtonData(
+				"🔄 Перенести",
+				fmt.Sprintf("reschedule_%d", b.ID),
+			),
+		))
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
+
+		h.inst.SendWithInlineKeyboard(msg.Chat.ID, info, keyboard)
 	}
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
-	h.inst.SendWithInlineKeyboard(msg.Chat.ID, "Ваши записи:", keyboard)
 }
 
 func (h *Handler) handleCancelBookingPrompt(ctx context.Context, chatID int64, userID int64, data string) {
@@ -718,5 +763,5 @@ func formatDateFull(t time.Time) string {
 	days := []string{"воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"}
 	months := []string{"", "января", "февраля", "марта", "апреля", "мая", "июня",
 		"июля", "августа", "сентября", "октября", "ноября", "декабря"}
-	return fmt.Sprintf("%s, %d %s", strings.Title(days[t.Weekday()]), t.Day(), months[t.Month()])
+	return fmt.Sprintf("%s, %d %s, %02d:%02d", strings.Title(days[t.Weekday()]), t.Day(), months[t.Month()], t.Hour(), t.Minute())
 }

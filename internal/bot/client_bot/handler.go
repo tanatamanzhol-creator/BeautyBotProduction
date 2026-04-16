@@ -145,7 +145,7 @@ func (h *Handler) handleQuestion(ctx context.Context, msg *tgbotapi.Message) {
 	username := master.AdminBotUsername // или ClientBotUsername, если нужно
 
 	if username == "" {
-		username = fmt.Sprintf("@unknown") // на случай, если не заполнено
+		username = "К сожалению, мастер еще не добавил свой Telegram" // на случай, если не заполнено
 	}
 
 	text := fmt.Sprintf(

@@ -144,18 +144,28 @@ type SessionState struct {
 
 // Steps for client bot
 const (
-	StepIdle              = ""
-	StepAwaitName         = "await_name"
-	StepAwaitPhone        = "await_phone"
-	StepSelectService     = "select_service"
-	StepSelectCategory    = "select_category"
-	StepSelectDate        = "select_date"
-	StepSelectTime        = "select_time"
-	StepConfirmBooking    = "confirm_booking"
-	StepAwaitReview       = "await_review"
+	StepIdle           = ""
+	StepAwaitName      = "await_name"
+	StepAwaitPhone     = "await_phone"
+	StepSelectService  = "select_service"
+	StepSelectCategory = "select_category"
+	StepSelectDate     = "select_date"
+	StepSelectTime     = "select_time"
+	StepConfirmBooking = "confirm_booking"
+	StepAwaitReview    = "await_review"
+)
+
+// Admin bot steps
+const (
 	StepAwaitBroadcastMsg = "await_broadcast_msg"
-	// Steps for admin bot — add service
+
+	// Add service
 	StepAwaitServiceName     = "await_service_name"
 	StepAwaitServicePrice    = "await_service_price"
 	StepAwaitServiceDuration = "await_service_duration"
+
+	// Edit service
+	StepAwaitEditServiceName     = "await_edit_svc_name"
+	StepAwaitEditServicePrice    = "await_edit_svc_price"
+	StepAwaitEditServiceDuration = "await_edit_svc_duration"
 )

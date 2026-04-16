@@ -1,10 +1,11 @@
 package repository
 
 import (
-	"context"
 	"beauty-bot/internal/models"
+	"context"
 
 	"beauty-bot/internal/db"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -156,4 +157,25 @@ func (r *ServiceRepo) HasActiveBookings(ctx context.Context, serviceID int) (boo
 		WHERE service_id=$1 AND status IN ('pending','confirmed')
 	`, serviceID).Scan(&count)
 	return count > 0, err
+}
+
+func (r *ServiceRepo) UpdateName(ctx context.Context, id int, name string) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+	_, err := r.db.Exec(ctx, `UPDATE services SET name=$2 WHERE id=$1`, id, name)
+	return err
+}
+
+func (r *ServiceRepo) UpdatePrice(ctx context.Context, id int, price int, priceFrom bool) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+	_, err := r.db.Exec(ctx, `UPDATE services SET price=$2, price_from=$3 WHERE id=$1`, id, price, priceFrom)
+	return err
+}
+
+func (r *ServiceRepo) UpdateDuration(ctx context.Context, id int, durationMin int) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+	_, err := r.db.Exec(ctx, `UPDATE services SET duration_min=$2 WHERE id=$1`, id, durationMin)
+	return err
 }

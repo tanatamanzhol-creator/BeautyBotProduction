@@ -59,6 +59,12 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 		h.handleNewServicePrice(ctx, msg)
 	case models.StepAwaitServiceDuration:
 		h.handleNewServiceDuration(ctx, msg)
+	case models.StepAwaitEditServiceName:
+		h.handleEditServiceName(ctx, msg)
+	case models.StepAwaitEditServicePrice:
+		h.handleEditServicePrice(ctx, msg)
+	case models.StepAwaitEditServiceDuration:
+		h.handleEditServiceDuration(ctx, msg)
 	default:
 		switch msg.Text {
 		case "📅 Расписание":
@@ -458,6 +464,34 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "")
 		h.inst.SendMessage(chatID, "❌ Запись отклонена.")
 		h.notifyClientRejected(ctx, bookingID)
+	case strings.HasPrefix(data, "svc_edit_name_"):
+		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_name_"))
+		session := h.inst.GetSession(userID)
+		session.Step = models.StepAwaitEditServiceName
+		session.ServiceID = svcID
+		h.inst.SetSession(userID, session)
+		h.inst.SendMessage(chatID, "Введите новое название:")
+
+	case strings.HasPrefix(data, "svc_edit_price_"):
+		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_price_"))
+		session := h.inst.GetSession(userID)
+		session.Step = models.StepAwaitEditServicePrice
+		session.ServiceID = svcID
+		h.inst.SetSession(userID, session)
+		h.inst.SendMessage(chatID, "Введите новую стоимость (например: 3000 или от 3000):")
+
+	case strings.HasPrefix(data, "svc_edit_duration_"):
+		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_duration_"))
+		session := h.inst.GetSession(userID)
+		session.Step = models.StepAwaitEditServiceDuration
+		session.ServiceID = svcID
+		h.inst.SetSession(userID, session)
+		h.inst.SendMessage(chatID, "Введите продолжительность в минутах:")
+
+	case strings.HasPrefix(data, "svc_edit_"):
+		// это уже существующий — меняем на showServiceEditMenu
+		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_"))
+		h.showServiceEditMenu(ctx, chatID, svcID)
 	case strings.HasPrefix(data, "admin_svc_"):
 		svcIDStr := strings.TrimPrefix(data, "admin_svc_")
 		if svcIDStr == "add" {
@@ -672,4 +706,74 @@ func (h *Handler) handleNewServiceDuration(ctx context.Context, msg *tgbotapi.Me
 		p.Name, p.Price, formatDuration(dur),
 	))
 	h.handleServices(ctx, msg.Chat.ID)
+}
+func (h *Handler) showServiceEditMenu(ctx context.Context, chatID int64, svcID int) {
+	svc, err := h.repos.Service.GetByID(ctx, svcID)
+	if err != nil {
+		return
+	}
+	priceStr := fmt.Sprintf("%d ₸", svc.Price)
+	if svc.PriceFrom {
+		priceStr = "от " + priceStr
+	}
+	text := fmt.Sprintf("<b>%s</b>\n%s — %s\n\nЧто изменить?",
+		svc.Name, priceStr, formatDuration(svc.DurationMin))
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("✏️ Название", fmt.Sprintf("svc_edit_name_%d", svcID)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💰 Стоимость", fmt.Sprintf("svc_edit_price_%d", svcID)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("⏱ Продолжительность", fmt.Sprintf("svc_edit_duration_%d", svcID)),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("← Назад", fmt.Sprintf("admin_svc_%d", svcID)),
+		),
+	)
+	h.inst.SendWithInlineKeyboard(chatID, text, keyboard)
+}
+
+func (h *Handler) handleEditServiceName(ctx context.Context, msg *tgbotapi.Message) {
+	name := strings.TrimSpace(msg.Text)
+	if name == "" {
+		h.inst.SendMessage(msg.Chat.ID, "Название не может быть пустым:")
+		return
+	}
+	session := h.inst.GetSession(msg.From.ID)
+	h.repos.Service.UpdateName(ctx, session.ServiceID, name)
+	h.finishEdit(ctx, msg.Chat.ID, msg.From.ID, session.ServiceID)
+}
+
+func (h *Handler) handleEditServicePrice(ctx context.Context, msg *tgbotapi.Message) {
+	input := strings.TrimSpace(strings.ToLower(msg.Text))
+	priceFrom := strings.HasPrefix(input, "от ")
+	numStr := strings.TrimPrefix(input, "от ")
+	price, err := strconv.Atoi(strings.TrimSpace(numStr))
+	if err != nil || price <= 0 {
+		h.inst.SendMessage(msg.Chat.ID, "Некорректная сумма. Введите число, например: 3000 или от 3000")
+		return
+	}
+	session := h.inst.GetSession(msg.From.ID)
+	h.repos.Service.UpdatePrice(ctx, session.ServiceID, price, priceFrom)
+	h.finishEdit(ctx, msg.Chat.ID, msg.From.ID, session.ServiceID)
+}
+
+func (h *Handler) handleEditServiceDuration(ctx context.Context, msg *tgbotapi.Message) {
+	dur, err := strconv.Atoi(strings.TrimSpace(msg.Text))
+	if err != nil || dur <= 0 {
+		h.inst.SendMessage(msg.Chat.ID, "Введите длительность в минутах, например: 60")
+		return
+	}
+	session := h.inst.GetSession(msg.From.ID)
+	h.repos.Service.UpdateDuration(ctx, session.ServiceID, dur)
+	h.finishEdit(ctx, msg.Chat.ID, msg.From.ID, session.ServiceID)
+}
+
+func (h *Handler) finishEdit(ctx context.Context, chatID int64, userID int64, svcID int) {
+	h.inst.ClearSession(userID)
+	h.inst.SendMessage(chatID, "✅ Сохранено")
+	h.showServiceActions(ctx, chatID, svcID)
 }

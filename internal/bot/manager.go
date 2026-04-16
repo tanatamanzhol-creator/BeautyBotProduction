@@ -172,16 +172,38 @@ func (m *Manager) NotifyClientConfirmed(masterID int, booking *models.Booking) {
 	if inst == nil {
 		return
 	}
+
 	ctx := context.Background()
+
 	master, _ := m.repos.Master.GetByID(ctx, masterID)
+
 	addr := ""
 	if master != nil && master.Address != "" {
 		addr = "\n📍 " + master.Address
 	}
+
+	// ⏱ время до записи
+	durationUntil := time.Until(booking.StartsAt)
+
+	reminderText := ""
+
+	if durationUntil > 24*time.Hour {
+		reminderText = "\n\n⏰ Напомним за 24 часа 🔔"
+	} else if durationUntil > 2*time.Hour {
+		reminderText = "\n\n⏰ Напомним за 2 часа 🔔"
+	} else {
+		reminderText = "\n\n⏰ Напомним перед записью 🔔"
+	}
+
 	text := fmt.Sprintf(
-		"Запись подтверждена! ✅\n\n💅 %s\n📅 %s — %s%s\n\nЖдём вас! Напомним за 24 часа 🔔",
-		booking.ServiceName, formatDate(booking.StartsAt), booking.StartsAt.Format("15:04"), addr,
+		"Запись подтверждена! ✅\n\n💅 %s\n📅 %s — %s%s%s\n\nЖдём вас!",
+		booking.ServiceName,
+		formatDate(booking.StartsAt),
+		booking.StartsAt.Format("15:04"),
+		addr,
+		reminderText,
 	)
+
 	inst.SendMessage(booking.ClientTelegramID, text)
 }
 

@@ -597,7 +597,20 @@ func (h *Handler) handleReschedule(ctx context.Context, chatID int64, userID int
 	session.BookingID = bookingID
 	session.Step = models.StepSelectDate
 	h.inst.SetSession(userID, session)
+	master := h.inst.Master
 
+	limitTime := booking.StartsAt.Add(-time.Duration(master.CancelLimitHours) * time.Hour)
+	if time.Now().After(limitTime) {
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("💬 Написать мастеру", "back_to_menu"),
+			),
+		)
+		h.inst.SendWithInlineKeyboard(chatID,
+			fmt.Sprintf("К сожалению, перенести запись можно не позже чем за %d часов 😔\n\nЕсли возникла срочная ситуация — напишите мастеру напрямую.", master.CancelLimitHours),
+			keyboard)
+		return
+	}
 	// Cancel old booking
 	h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByClient, "Перенос")
 	h.inst.SendMessage(chatID, "Ваша старая запись отменена. Выберите новое время")

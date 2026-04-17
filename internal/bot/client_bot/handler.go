@@ -126,10 +126,10 @@ func (h *Handler) sendMainMenu(ctx context.Context, chatID int64, text string) {
 		),
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("💬 Вопрос"),
-			tgbotapi.NewKeyboardButton("🏠 Главное меню (начать)"), // добавляем кнопку для главного меню
+			tgbotapi.NewKeyboardButton("🗺 Адрес"),
 		),
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton("🗺 Адрес"),
+			tgbotapi.NewKeyboardButton("🏠 Главное меню (начать)"), // добавляем кнопку для главного меню
 		),
 	)
 	kb.ResizeKeyboard = true

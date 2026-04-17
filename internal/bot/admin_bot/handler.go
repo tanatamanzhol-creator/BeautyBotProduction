@@ -441,11 +441,6 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		date := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local)
 		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
 		h.showDaySchedule(ctx, chatID, date, bookings)
-	case strings.HasPrefix(data, "sched_day_"):
-		offset, _ := strconv.Atoi(strings.TrimPrefix(data, "sched_day_"))
-		day := time.Now().AddDate(0, 0, offset)
-		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, day)
-		h.showDaySchedule(ctx, chatID, day, bookings)
 	case data == "broadcast_1m":
 		h.handleBroadcastSegment(ctx, chatID, userID, 1)
 	case data == "broadcast_2m":

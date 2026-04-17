@@ -79,6 +79,8 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 			h.handleMyBookings(ctx, msg, client)
 		case "💬 Вопрос":
 			h.handleQuestion(ctx, msg)
+		case "🗺 Адрес":
+			h.handleAddress(ctx, msg.Chat.ID)
 		default:
 			h.sendMainMenu(ctx, msg.Chat.ID, "Выберите действие из меню 👇")
 		}
@@ -125,6 +127,9 @@ func (h *Handler) sendMainMenu(ctx context.Context, chatID int64, text string) {
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("💬 Вопрос"),
 			tgbotapi.NewKeyboardButton("🏠 Главное меню (начать)"), // добавляем кнопку для главного меню
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("🗺 Адрес"),
 		),
 	)
 	kb.ResizeKeyboard = true
@@ -219,4 +224,33 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.inst.SetSession(userID, session)
 		h.inst.SendMessage(chatID, "Напишите ваш отзыв ✏️\n\nМастер обязательно прочитает его 🤍")
 	}
+}
+
+func (h *Handler) handleAddress(ctx context.Context, chatID int64) {
+	master, err := h.repos.Master.GetByID(ctx, h.inst.Master.ID)
+	if err != nil {
+		h.inst.SendMessage(chatID, "Ошибка получения адреса.")
+		return
+	}
+
+	var url string
+
+	if master.PoiID != "" {
+		url = fmt.Sprintf("https://2gis.kz/pavlodar/geo/%s", master.PoiID)
+	} else if master.Latitude != 0 && master.Longitude != 0 {
+		// правильный порядок: latitude, longitude
+		url = fmt.Sprintf("https://2gis.kz/geo/%f,%f", master.Latitude, master.Longitude)
+	} else {
+		h.inst.SendMessage(chatID, "Адрес не указан.")
+		return
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonURL("🗺 Открыть в 2ГИС", url),
+		),
+	)
+	text := fmt.Sprintf("📍 Моё местоположение:\n%s", master.Address)
+
+	h.inst.SendWithInlineKeyboard(chatID, text, keyboard)
 }

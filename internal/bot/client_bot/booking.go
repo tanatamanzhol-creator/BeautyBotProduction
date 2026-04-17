@@ -467,30 +467,6 @@ func (h *Handler) handleMyBookings(ctx context.Context, msg *tgbotapi.Message, c
 
 		var rows [][]tgbotapi.InlineKeyboardButton
 
-		// 1. СНАЧАЛА 2GIS
-		if master.PoiID != "" {
-			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonURL(
-					"🗺 Открыть в 2ГИС",
-					fmt.Sprintf(
-						"https://2gis.kz/pavlodar/geo/%s",
-						master.PoiID,
-					),
-				),
-			))
-		} else if master.Latitude != 0 && master.Longitude != 0 {
-			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonURL(
-					"🗺 Открыть в 2ГИС",
-					fmt.Sprintf(
-						"https://2gis.kz/geo/%f,%f",
-						master.Longitude,
-						master.Latitude,
-					),
-				),
-			))
-		}
-
 		// 2. ПОТОМ действия
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData(

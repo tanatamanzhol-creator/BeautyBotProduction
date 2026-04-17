@@ -269,7 +269,12 @@ func (h *Handler) handleWorkSchedule(ctx context.Context, chatID int64) {
 	sb.WriteString("🕐 <b>Ваш рабочий график:</b>\n\n")
 	for i, day := range schedDays {
 		if day.Start != nil && day.End != nil {
-			sb.WriteString(fmt.Sprintf("%s: %s — %s ✅\n", dayName[i], *day.Start, *day.End))
+			sb.WriteString(fmt.Sprintf(
+				"%s: %s — %s ✅\n",
+				dayName[i],
+				day.Start.Format("15:04"),
+				day.End.Format("15:04"),
+			))
 		} else {
 			sb.WriteString(fmt.Sprintf("%s: выходной ❌\n", dayName[i]))
 		}

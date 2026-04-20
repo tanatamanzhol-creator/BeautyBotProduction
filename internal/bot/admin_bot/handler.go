@@ -190,7 +190,14 @@ func (h *Handler) handleClients(ctx context.Context, chatID int64) {
 				text += fmt.Sprintf("\n...и ещё %d клиентов", len(clients)-10)
 				break
 			}
-			text += fmt.Sprintf("👤 <b>%s</b> — %s\n", c.Name, c.Phone)
+
+			lastVisit := "—"
+			if c.LastVisitAt != nil {
+				lastVisit = c.LastVisitAt.Format("02.01.2006")
+			}
+
+			text += fmt.Sprintf("👤 <b>%s</b>\n📞 %s\n✅ Визитов: %d | 📅 Последний: %s\n\n",
+				c.Name, c.Phone, c.VisitCount, lastVisit)
 		}
 	}
 	h.inst.SendMessage(chatID, text)

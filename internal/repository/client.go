@@ -1,11 +1,12 @@
 package repository
 
 import (
+	"beauty-bot/internal/models"
 	"context"
 	"time"
-	"beauty-bot/internal/models"
 
 	"beauty-bot/internal/db"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -30,11 +31,11 @@ func (r *ClientRepo) GetOrCreate(ctx context.Context, masterID int, telegramID i
 		RETURNING id, master_id, telegram_id, telegram_username,
 		          COALESCE(name,''), COALESCE(phone,''),
 		          consent_given, consent_given_at,
-		          no_broadcast, is_blocked, created_at
+		          no_broadcast, is_blocked, created_at, visit_count, last_visit_at
 	`, masterID, telegramID, username).Scan(
 		&client.ID, &client.MasterID, &client.TelegramID, &client.TelegramUsername,
 		&client.Name, &client.Phone, &client.ConsentGiven, &client.ConsentGivenAt,
-		&client.NoBroadcast, &client.IsBlocked, &client.CreatedAt,
+		&client.NoBroadcast, &client.IsBlocked, &client.CreatedAt, &client.VisitCount, &client.LastVisitAt,
 	)
 	return client, err
 }
@@ -48,13 +49,13 @@ func (r *ClientRepo) GetByTelegramID(ctx context.Context, masterID int, telegram
 		SELECT id, master_id, telegram_id, telegram_username,
 		       COALESCE(name,''), COALESCE(phone,''),
 		       consent_given, consent_given_at,
-		       no_broadcast, is_blocked, created_at
+		       no_broadcast, is_blocked, created_at, visit_count, last_visit_at
 		FROM clients
 		WHERE master_id = $1 AND telegram_id = $2
 	`, masterID, telegramID).Scan(
 		&client.ID, &client.MasterID, &client.TelegramID, &client.TelegramUsername,
 		&client.Name, &client.Phone, &client.ConsentGiven, &client.ConsentGivenAt,
-		&client.NoBroadcast, &client.IsBlocked, &client.CreatedAt,
+		&client.NoBroadcast, &client.IsBlocked, &client.CreatedAt, &client.VisitCount, &client.LastVisitAt,
 	)
 	return client, err
 }
@@ -107,20 +108,26 @@ func (r *ClientRepo) GetAllForBroadcast(ctx context.Context, masterID int, inact
 	defer cancel()
 
 	rows, err := r.db.Query(ctx, `
-		SELECT c.id, c.master_id, c.telegram_id, c.telegram_username,
-		       COALESCE(c.name,''), COALESCE(c.phone,''),
-		       c.consent_given, c.consent_given_at,
-		       c.no_broadcast, c.is_blocked, c.created_at
-		FROM clients c
-		WHERE c.master_id = $1
-		  AND c.consent_given = TRUE
-		  AND c.no_broadcast = FALSE
-		  AND c.is_blocked = FALSE
-		  AND (
-		    SELECT MAX(b.starts_at) FROM bookings b
-		    WHERE b.client_id = c.id AND b.status = 'completed'
-		  ) < $2
-	`, masterID, inactiveSince)
+	SELECT c.id, c.master_id, c.telegram_id, c.telegram_username,
+	       COALESCE(c.name,''), COALESCE(c.phone,''),
+	       c.consent_given, c.consent_given_at,
+	       c.no_broadcast, c.is_blocked, c.created_at
+	FROM clients c
+	LEFT JOIN (
+		SELECT client_id, MAX(starts_at) AS last_visit
+		FROM bookings
+		WHERE status = 'completed'
+		GROUP BY client_id
+	) b ON b.client_id = c.id
+	WHERE c.master_id = $1
+	  AND c.consent_given = TRUE
+	  AND c.no_broadcast = FALSE
+	  AND c.is_blocked = FALSE
+	  AND (
+	    b.last_visit IS NULL
+	    OR b.last_visit < $2
+	  )
+`, masterID, inactiveSince)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +156,7 @@ func (r *ClientRepo) GetAllForMaster(ctx context.Context, masterID int) ([]*mode
 		SELECT id, master_id, telegram_id, telegram_username,
 		       COALESCE(name,''), COALESCE(phone,''),
 		       consent_given, consent_given_at,
-		       no_broadcast, is_blocked, created_at
+		       no_broadcast, is_blocked, created_at, visit_count, last_visit_at
 		FROM clients WHERE master_id=$1
 		ORDER BY created_at DESC
 	`, masterID)
@@ -164,11 +171,23 @@ func (r *ClientRepo) GetAllForMaster(ctx context.Context, masterID int) ([]*mode
 		if err := rows.Scan(
 			&cl.ID, &cl.MasterID, &cl.TelegramID, &cl.TelegramUsername,
 			&cl.Name, &cl.Phone, &cl.ConsentGiven, &cl.ConsentGivenAt,
-			&cl.NoBroadcast, &cl.IsBlocked, &cl.CreatedAt,
+			&cl.NoBroadcast, &cl.IsBlocked, &cl.CreatedAt, &cl.VisitCount, &cl.LastVisitAt,
 		); err != nil {
 			return nil, err
 		}
 		clients = append(clients, cl)
 	}
 	return clients, nil
+}
+func (r *ClientRepo) IncrementVisitCount(ctx context.Context, clientID int, lastVisitAt time.Time) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	_, err := r.db.Exec(ctx, `
+        UPDATE clients 
+        SET visit_count = visit_count + 1,
+            last_visit_at = $2
+        WHERE id = $1
+    `, clientID, lastVisitAt)
+	return err
 }

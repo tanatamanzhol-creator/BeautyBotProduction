@@ -72,6 +72,8 @@ type Client struct {
 	NoBroadcast      bool
 	IsBlocked        bool
 	CreatedAt        time.Time
+	VisitCount       int
+	LastVisitAt      *time.Time
 }
 
 type Booking struct {

@@ -504,6 +504,22 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		// это уже существующий — меняем на showServiceEditMenu
 		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_"))
 		h.showServiceEditMenu(ctx, chatID, svcID)
+	case strings.HasPrefix(data, "svc_delete_"):
+		svcIDStr := strings.TrimPrefix(data, "svc_delete_")
+		svcID, err := strconv.Atoi(svcIDStr)
+		if err != nil {
+			h.inst.SendMessage(chatID, "Ошибка при удалении.")
+			return
+		}
+		err = h.repos.Service.Delete(ctx, svcID)
+		if err != nil {
+			h.inst.SendMessage(chatID, "Не удалось удалить услугу.")
+			return
+		}
+		h.inst.SendMessage(chatID, "Услуга удалена ✅")
+		h.handleServices(ctx, chatID)
+	case data == "back_services":
+		h.handleServices(ctx, chatID)
 	case strings.HasPrefix(data, "admin_svc_"):
 		svcIDStr := strings.TrimPrefix(data, "admin_svc_")
 		if svcIDStr == "add" {
@@ -563,15 +579,15 @@ func (h *Handler) showServiceActions(ctx context.Context, chatID int64, svcID in
 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 		tgbotapi.NewInlineKeyboardButtonData("✏️ Редактировать", fmt.Sprintf("svc_edit_%d", svcID)),
 	))
-	if svc.IsActive {
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🚫 Скрыть", fmt.Sprintf("svc_hide_%d", svcID)),
-		))
-	} else {
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Показать", fmt.Sprintf("svc_show_%d", svcID)),
-		))
-	}
+	// if svc.IsActive {
+	// 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+	// 		tgbotapi.NewInlineKeyboardButtonData("🚫 Скрыть", fmt.Sprintf("svc_hide_%d", svcID)),
+	// 	))
+	// } else {
+	// 	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+	// 		tgbotapi.NewInlineKeyboardButtonData("✅ Показать", fmt.Sprintf("svc_show_%d", svcID)),
+	// 	))
+	// }
 	if !hasBookings {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("🗑 Удалить", fmt.Sprintf("svc_delete_%d", svcID)),

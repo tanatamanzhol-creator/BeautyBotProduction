@@ -490,7 +490,7 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		session.Step = models.StepAwaitEditServicePrice
 		session.ServiceID = svcID
 		h.inst.SetSession(userID, session)
-		h.inst.SendMessage(chatID, "Введите новую стоимость (например: 3000 или от 3000):")
+		h.inst.SendMessage(chatID, "Введите новую цену в тенге (только число):")
 
 	case strings.HasPrefix(data, "svc_edit_duration_"):
 		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_duration_"))
@@ -774,7 +774,7 @@ func (h *Handler) handleEditServicePrice(ctx context.Context, msg *tgbotapi.Mess
 	numStr := strings.TrimPrefix(input, "от ")
 	price, err := strconv.Atoi(strings.TrimSpace(numStr))
 	if err != nil || price <= 0 {
-		h.inst.SendMessage(msg.Chat.ID, "Некорректная сумма. Введите число, например: 3000 или от 3000")
+		h.inst.SendMessage(msg.Chat.ID, "Некорректная сумма. Введите число, например: 3000")
 		return
 	}
 	session := h.inst.GetSession(msg.From.ID)

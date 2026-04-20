@@ -131,7 +131,7 @@ func (h *Handler) handleScheduleToday(ctx context.Context, chatID int64) {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n\n", formatDateFull(time.Now())))
+	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n\n", formatDate(time.Now())))
 	total := 0
 	for _, b := range bookings {
 		sb.WriteString(fmt.Sprintf(
@@ -537,11 +537,11 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 
 func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {
 	if len(bookings) == 0 {
-		h.inst.SendMessage(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDateFull(date)))
+		h.inst.SendMessage(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)))
 		return
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n\n", formatDateFull(date)))
+	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n\n", formatDate(date)))
 	total := 0
 	for _, b := range bookings {
 		sb.WriteString(fmt.Sprintf("⏰ <b>%s</b> — %s\n   💅 %s\n\n",
@@ -641,6 +641,13 @@ func formatDateFull(t time.Time) string {
 		"июля", "августа", "сентября", "октября", "ноября", "декабря"}
 	return fmt.Sprintf("%s, %d %s, %02d:%02d",
 		strings.Title(days[t.Weekday()]), t.Day(), months[t.Month()], t.Hour(), t.Minute())
+}
+
+func formatDate(t time.Time) string {
+	days := []string{"Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"}
+	months := []string{"января", "февраля", "марта", "апреля", "мая", "июня",
+		"июля", "августа", "сентября", "октября", "ноября", "декабря"}
+	return fmt.Sprintf("%s, %d %s", days[t.Weekday()], t.Day(), months[t.Month()-1])
 }
 
 func formatDuration(minutes int) string {

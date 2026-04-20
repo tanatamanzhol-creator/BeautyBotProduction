@@ -1,6 +1,7 @@
 package types
 
 import (
+	"log"
 	"sync"
 
 	"beauty-bot/internal/models"
@@ -67,8 +68,16 @@ func (inst *BotInstance) SendMessage(chatID int64, text string) {
 func (inst *BotInstance) SendWithInlineKeyboard(chatID int64, text string, kb tgbotapi.InlineKeyboardMarkup) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "HTML"
-	msg.ReplyMarkup = kb
-	inst.API.Send(msg)
+
+	// 🔥 важно: не отправляем пустую клавиатуру
+	if len(kb.InlineKeyboard) > 0 {
+		msg.ReplyMarkup = kb
+	}
+
+	_, err := inst.API.Send(msg)
+	if err != nil {
+		log.Printf("SendWithInlineKeyboard error: %v", err)
+	}
 }
 
 func (inst *BotInstance) SendWithReplyKeyboard(chatID int64, text string, kb tgbotapi.ReplyKeyboardMarkup) {

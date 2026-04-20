@@ -200,6 +200,11 @@ func (h *Handler) handleClients(ctx context.Context, chatID int64) {
 
 func (h *Handler) handleReviews(ctx context.Context, chatID int64) {
 	reviews, err := h.repos.Review.GetAllForMaster(ctx, h.inst.Master.ID)
+
+	if len(reviews) == 0 {
+		h.inst.SendMessage(chatID, "Пока нет отзывов")
+		return
+	}
 	if err != nil {
 		log.Printf("Error fetching reviews: %v", err)
 		h.inst.SendMessage(chatID, "Произошла ошибка при получении отзывов. Попробуйте снова.")
@@ -503,6 +508,8 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		}
 		svcID, _ := strconv.Atoi(svcIDStr)
 		h.showServiceActions(ctx, chatID, svcID)
+	case data == "reviews":
+		h.handleReviews(ctx, chatID)
 	case strings.HasPrefix(data, "reviews_page_"):
 		pageStr := strings.TrimPrefix(data, "reviews_page_")
 		page, err := strconv.Atoi(pageStr)

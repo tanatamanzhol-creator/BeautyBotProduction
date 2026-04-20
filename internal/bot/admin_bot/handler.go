@@ -80,7 +80,7 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 		case "📢 Рассылка":
 			h.handleBroadcast(ctx, msg.Chat.ID)
 		case "📊 Статистика":
-			h.handleStats(ctx, msg.Chat.ID)
+			h.handleStats(ctx, msg.Chat.ID, "month")
 		default:
 			h.sendMainMenu(ctx, msg.Chat.ID)
 		}
@@ -364,13 +364,34 @@ func (h *Handler) handleBroadcastMessage(ctx context.Context, msg *tgbotapi.Mess
 
 // ── Stats ─────────────────────────────────────────────────────────────────
 
-func (h *Handler) handleStats(ctx context.Context, chatID int64) {
+func (h *Handler) handleStats(ctx context.Context, chatID int64, period string) {
 	now := time.Now()
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
-	monthEnd := monthStart.AddDate(0, 1, 0)
+	var start, end time.Time
+	var periodLabel string
+
+	switch period {
+	case "week":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		start = time.Date(now.Year(), now.Month(), now.Day()-weekday+1, 0, 0, 0, 0, time.Local)
+		end = start.AddDate(0, 0, 7)
+		periodLabel = "эту неделю"
+	case "all":
+		start = time.Time{}
+		end = now.AddDate(1, 0, 0)
+		periodLabel = "всё время"
+	default: // month
+		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+		end = start.AddDate(0, 1, 0)
+		months := []string{"", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+			"Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"}
+		periodLabel = months[now.Month()]
+	}
 
 	total, completed, cancelled, revenue, err := h.repos.Booking.GetStatsForMaster(
-		ctx, h.inst.Master.ID, monthStart, monthEnd)
+		ctx, h.inst.Master.ID, start, end)
 	if err != nil {
 		h.inst.SendMessage(chatID, "Ошибка загрузки статистики.")
 		return
@@ -378,9 +399,6 @@ func (h *Handler) handleStats(ctx context.Context, chatID int64) {
 
 	clients, _ := h.repos.Client.GetAllForMaster(ctx, h.inst.Master.ID)
 	reviews, _ := h.repos.Review.GetAllForMaster(ctx, h.inst.Master.ID)
-
-	months := []string{"", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-		"Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"}
 
 	text := fmt.Sprintf(
 		"📊 <b>Статистика за %s</b>\n\n"+
@@ -390,7 +408,7 @@ func (h *Handler) handleStats(ctx context.Context, chatID int64) {
 			"💰 Выручка: <b>~%d ₸</b>\n\n"+
 			"👥 Клиентов всего: <b>%d</b>\n"+
 			"⭐ Отзывов: <b>%d</b>",
-		months[now.Month()],
+		periodLabel,
 		total, completed, cancelled,
 		revenue,
 		len(clients),
@@ -546,8 +564,12 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		}
 
 		h.sendReviewsPage(ctx, chatID, reviews, page)
-	case data == "stats_week", data == "stats_month", data == "stats_all":
-		h.handleStats(ctx, chatID)
+	case data == "stats_week":
+		h.handleStats(ctx, chatID, "week")
+	case data == "stats_month":
+		h.handleStats(ctx, chatID, "month")
+	case data == "stats_all":
+		h.handleStats(ctx, chatID, "all")
 	}
 }
 

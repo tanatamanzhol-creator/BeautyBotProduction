@@ -99,11 +99,11 @@ func (h *Handler) sendMainMenu(ctx context.Context, chatID int64) {
 		),
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("🕐 График работы"),
-			tgbotapi.NewKeyboardButton("📢 Рассылка"),
-		),
-		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("📊 Статистика"),
+
+			// tgbotapi.NewKeyboardButton("📢 Рассылка"),
 		),
+		// tgbotapi.NewKeyboardButtonRow(),
 	)
 	keyboard.ResizeKeyboard = true
 	h.inst.SendWithReplyKeyboard(chatID, "Панель управления 🎛", keyboard)
@@ -438,19 +438,25 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	case data == "sched_today":
 		h.handleScheduleToday(ctx, chatID)
 	case data == "sched_tomorrow":
-		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, time.Now().AddDate(0, 0, 1))
-		h.showDaySchedule(ctx, chatID, time.Now().AddDate(0, 0, 1), bookings)
+		tomorrow := time.Now().AddDate(0, 0, 1)
+		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, tomorrow)
+		h.showDaySchedule(ctx, chatID, tomorrow, bookings)
 	case data == "sched_select_month":
 		now := time.Now()
+		months := []string{"", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+			"Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"}
 		var rows [][]tgbotapi.InlineKeyboardButton
 		for i := 0; i < 4; i++ {
 			m := now.AddDate(0, i, 0)
-			monthName := fmt.Sprintf("%s %d", m.Month().String(), m.Year())              // для пользователя
-			callbackData := fmt.Sprintf("sched_select_day_%d-%02d", m.Year(), m.Month()) // для обработки
+			monthName := fmt.Sprintf("%s %d", months[m.Month()], m.Year())
+			callbackData := fmt.Sprintf("sched_select_day_%d-%02d", m.Year(), m.Month())
 			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData(monthName, callbackData),
 			))
 		}
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("← Назад", "sched_today"),
+		))
 		h.inst.SendWithInlineKeyboard(chatID, "Выберите месяц:", tgbotapi.NewInlineKeyboardMarkup(rows...))
 	case strings.HasPrefix(data, "sched_select_day_"):
 		parts := strings.Split(strings.TrimPrefix(data, "sched_select_day_"), "-")
@@ -574,8 +580,16 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 }
 
 func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Сегодня", "sched_today"),
+			tgbotapi.NewInlineKeyboardButtonData("Завтра", "sched_tomorrow"),
+			tgbotapi.NewInlineKeyboardButtonData("Выбрать день", "sched_select_month"),
+		),
+	)
+
 	if len(bookings) == 0 {
-		h.inst.SendMessage(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)))
+		h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)), keyboard)
 		return
 	}
 	var sb strings.Builder
@@ -587,7 +601,7 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		total += b.ServicePrice
 	}
 	sb.WriteString(fmt.Sprintf("Итого: <b>%d</b> / ~%d ₸", len(bookings), total))
-	h.inst.SendMessage(chatID, sb.String())
+	h.inst.SendWithInlineKeyboard(chatID, sb.String(), keyboard)
 }
 
 func (h *Handler) showServiceActions(ctx context.Context, chatID int64, svcID int) {

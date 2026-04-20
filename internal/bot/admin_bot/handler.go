@@ -270,7 +270,7 @@ func (h *Handler) handleWorkSchedule(ctx context.Context, chatID int64) {
 	for i, day := range schedDays {
 		if day.Start != nil && day.End != nil {
 			sb.WriteString(fmt.Sprintf(
-				"%s: %s — %s ✅\n",
+				"%s: %s - %s ✅\n",
 				dayName[i],
 				day.Start.Format("15:04"),
 				day.End.Format("15:04"),

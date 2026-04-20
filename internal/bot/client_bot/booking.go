@@ -456,7 +456,7 @@ func (h *Handler) handleMyBookings(ctx context.Context, msg *tgbotapi.Message, c
 		endsAt := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
 
 		info := fmt.Sprintf(
-			"📅 %s\n✂️ %s\n👤 %s\n🕐 %02d:%02d — %02d:%02d\n💰 %d ₸",
+			"📅 %s\n✂️ %s\n👤 Ваш мастер - %s\n🕐 %02d:%02d - %02d:%02d\n💰 %d ₸",
 			formatDateFull(b.StartsAt),
 			b.ServiceName,
 			master.Name,

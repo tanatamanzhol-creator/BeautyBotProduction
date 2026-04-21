@@ -216,7 +216,7 @@ func (h *Handler) showTimeSlots(ctx context.Context, chatID int64, userID int64,
 
 	parsedDate, _ := time.ParseInLocation("2006-01-02", dateStr, time.Local)
 	h.inst.SendWithInlineKeyboard(chatID,
-		fmt.Sprintf("<b>%s</b> — выберите время ⏰", formatDateFull(parsedDate)),
+		fmt.Sprintf("<b>%s</b> — выберите время ⏰", formatDate(parsedDate)),
 		tgbotapi.NewInlineKeyboardMarkup(rows...))
 }
 
@@ -410,7 +410,7 @@ func (h *Handler) handleConfirmBooking(ctx context.Context, chatID int64, userID
 	// Notify client
 	h.inst.SendMessage(chatID,
 		"Отлично! Заявка отправлена 🎉\nОжидайте подтверждения от мастера.\nОбычно это занимает несколько минут.")
-	h.sendMainMenu(ctx, chatID, "")
+	h.sendMainMenu(ctx, chatID, "Главное меню 👇")
 
 	// Notify master via admin bot
 	h.notifyMasterNewBooking(ctx, bookingID, svc, client, startsAt)

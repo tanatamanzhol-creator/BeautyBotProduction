@@ -204,7 +204,17 @@ func (m *Manager) NotifyClientConfirmed(masterID int, booking *models.Booking) {
 		reminderText,
 	)
 
-	inst.SendMessage(booking.ClientTelegramID, text)
+	kb := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("📅 Записаться"),
+			tgbotapi.NewKeyboardButton("📋 Мои записи"),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("💬 Вопрос"),
+			tgbotapi.NewKeyboardButton("🗺 Адрес"),
+		),
+	)
+	inst.SendWithReplyKeyboard(booking.ClientTelegramID, text, kb)
 }
 
 func (m *Manager) NotifyClientRejected(masterID int, booking *models.Booking, reason string) {

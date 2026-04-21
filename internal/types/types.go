@@ -80,10 +80,10 @@ func (inst *BotInstance) SendWithInlineKeyboard(chatID int64, text string, kb tg
 	}
 }
 
-func (inst *BotInstance) SendWithReplyKeyboard(chatID int64, text string, kb tgbotapi.ReplyKeyboardMarkup) {
+func (inst *BotInstance) SendWithReplyKeyboard(chatID int64, text string, keyboard tgbotapi.ReplyKeyboardMarkup) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "HTML"
-	msg.ReplyMarkup = kb
+	msg.ReplyMarkup = keyboard
 	inst.API.Send(msg)
 }
 

@@ -148,20 +148,20 @@ func (h *Handler) handlePrivacy(ctx context.Context, msg *tgbotapi.Message) {
 func (h *Handler) handleQuestion(ctx context.Context, msg *tgbotapi.Message) {
 	master := h.inst.Master
 
-	var telegramContact string
-	if master.MasterTelegramID != 0 {
-		telegramContact = fmt.Sprintf("tg://user?id=%d", master.MasterTelegramID)
-	} else {
-		telegramContact = "К сожалению, мастер еще не добавил свой Telegram"
-	}
+	text := "💬 Напишите сообщение напрямую мастеру в Telegram\nАдрес: " + master.Address
 
-	text := fmt.Sprintf(
-		"💬 Напишите сообщение напрямую мастеру в "+
-			"Telegram: %s\nАдрес: %s",
-		telegramContact, master.Address,
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonURL(
+				"Написать мастеру",
+				fmt.Sprintf("tg://user?id=%d", master.MasterTelegramID),
+			),
+		),
 	)
 
-	h.inst.SendMessage(msg.Chat.ID, text)
+	replyMsg := tgbotapi.NewMessage(msg.Chat.ID, text)
+	replyMsg.ReplyMarkup = keyboard
+	h.inst.API.Send(replyMsg)
 }
 
 func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {

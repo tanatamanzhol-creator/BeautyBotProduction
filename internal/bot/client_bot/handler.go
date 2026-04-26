@@ -146,11 +146,13 @@ func (h *Handler) handlePrivacy(ctx context.Context, msg *tgbotapi.Message) {
 }
 
 func (h *Handler) handleQuestion(ctx context.Context, msg *tgbotapi.Message) {
-	master := h.inst.Master             // текущий мастер бота
-	username := master.AdminBotUsername // или ClientBotUsername, если нужно
+	master := h.inst.Master
+	username := master.AdminBotUsername
 
 	if username == "" {
-		username = "К сожалению, мастер еще не добавил свой Telegram" // на случай, если не заполнено
+		username = "К сожалению, мастер еще не добавил свой Telegram"
+	} else {
+		username = "@" + username
 	}
 
 	text := fmt.Sprintf(

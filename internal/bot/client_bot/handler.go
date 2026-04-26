@@ -148,7 +148,7 @@ func (h *Handler) handlePrivacy(ctx context.Context, msg *tgbotapi.Message) {
 func (h *Handler) handleQuestion(ctx context.Context, msg *tgbotapi.Message) {
 	master := h.inst.Master
 
-	text := "💬 Напишите сообщение напрямую мастеру в Telegram\nАдрес: " + master.Address
+	text := "💬 Напишите сообщение напрямую мастеру в Telegram по кнопке ниже"
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(

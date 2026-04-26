@@ -147,18 +147,18 @@ func (h *Handler) handlePrivacy(ctx context.Context, msg *tgbotapi.Message) {
 
 func (h *Handler) handleQuestion(ctx context.Context, msg *tgbotapi.Message) {
 	master := h.inst.Master
-	username := master.AdminBotUsername
 
-	if username == "" {
-		username = "К сожалению, мастер еще не добавил свой Telegram"
+	var telegramContact string
+	if master.MasterTelegramID != 0 {
+		telegramContact = fmt.Sprintf("tg://user?id=%d", master.MasterTelegramID)
 	} else {
-		username = "@" + username
+		telegramContact = "К сожалению, мастер еще не добавил свой Telegram"
 	}
 
 	text := fmt.Sprintf(
 		"💬 Напишите сообщение напрямую мастеру в "+
 			"Telegram: %s\nАдрес: %s",
-		username, master.Address,
+		telegramContact, master.Address,
 	)
 
 	h.inst.SendMessage(msg.Chat.ID, text)

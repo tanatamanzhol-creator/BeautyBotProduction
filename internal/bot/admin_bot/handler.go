@@ -505,8 +505,9 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.repos.Booking.Confirm(ctx, bookingID, "master")
 		h.notifyClientConfirmed(ctx, bookingID)
 
-		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
-			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
+		newText := cb.Message.Text + "\n\n✅ Подтверждено"
+		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID, newText)
+		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
 		h.inst.API.Send(edit)
 
 	case strings.HasPrefix(data, "admin_reject_"):
@@ -524,8 +525,9 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "")
 		h.notifyClientRejected(ctx, bookingID)
 
-		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
-			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
+		newText := cb.Message.Text + "\n\n❌ Отклонено"
+		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID, newText)
+		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
 		h.inst.API.Send(edit)
 	case strings.HasPrefix(data, "svc_edit_name_"):
 		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_name_"))

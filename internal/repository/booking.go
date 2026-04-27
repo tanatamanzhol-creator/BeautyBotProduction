@@ -1,11 +1,12 @@
 package repository
 
 import (
+	"beauty-bot/internal/models"
 	"context"
 	"time"
-	"beauty-bot/internal/models"
 
 	"beauty-bot/internal/db"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -74,7 +75,7 @@ func (r *BookingRepo) GetUpcomingForClient(ctx context.Context, masterID, client
 		JOIN clients c ON c.id = b.client_id
 		JOIN services s ON s.id = b.service_id
 		WHERE b.master_id=$1 AND b.client_id=$2
-		  AND b.status IN ('pending','confirmed')
+		  AND b.status NOT IN ('expired')
 		  AND b.starts_at > NOW()
 		ORDER BY b.starts_at
 	`, masterID, clientID)
@@ -105,7 +106,6 @@ func (r *BookingRepo) GetForDay(ctx context.Context, masterID int, date time.Tim
 		JOIN services s ON s.id = b.service_id
 		WHERE b.master_id=$1
 		  AND b.starts_at >= $2 AND b.starts_at < $3
-		  AND b.status IN ('pending','confirmed')
 		ORDER BY b.starts_at
 	`, masterID, dayStart, dayEnd)
 	if err != nil {

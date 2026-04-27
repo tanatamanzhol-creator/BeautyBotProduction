@@ -492,14 +492,47 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.handleTemplate(ctx, chatID, userID, data)
 	case strings.HasPrefix(data, "admin_confirm_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "admin_confirm_"))
+
+		// Проверяем что запись ещё pending
+		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+		if err != nil {
+			return
+		}
+		if booking.Status != models.StatusPending {
+			h.inst.API.Send(tgbotapi.NewCallback(cb.ID, "Уже обработано"))
+			return
+		}
+
 		h.repos.Booking.Confirm(ctx, bookingID, "master")
-		h.inst.SendMessage(chatID, "✅ Запись подтверждена!")
 		h.notifyClientConfirmed(ctx, bookingID)
+
+		// Редактируем сообщение — убираем кнопки, добавляем статус
+		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID,
+			cb.Message.Text+"\n\n✅ Подтверждено")
+		edit.ParseMode = "HTML"
+		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{} // пустая — убирает кнопки
+		h.inst.API.Send(edit)
+
 	case strings.HasPrefix(data, "admin_reject_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "admin_reject_"))
+
+		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+		if err != nil {
+			return
+		}
+		if booking.Status != models.StatusPending {
+			h.inst.API.Send(tgbotapi.NewCallback(cb.ID, "Уже обработано"))
+			return
+		}
+
 		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "")
-		h.inst.SendMessage(chatID, "❌ Запись отклонена.")
 		h.notifyClientRejected(ctx, bookingID)
+
+		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID,
+			cb.Message.Text+"\n\n❌ Отклонено")
+		edit.ParseMode = "HTML"
+		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{}
+		h.inst.API.Send(edit)
 	case strings.HasPrefix(data, "svc_edit_name_"):
 		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_name_"))
 		session := h.inst.GetSession(userID)

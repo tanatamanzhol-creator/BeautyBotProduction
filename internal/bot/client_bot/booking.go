@@ -400,6 +400,7 @@ func (h *Handler) handleConfirmBooking(ctx context.Context, chatID int64, userID
 		ServiceID: svc.ID,
 		StartsAt:  startsAt,
 		EndsAt:    endsAt,
+		Status:    models.StatusPending,
 	})
 	if err != nil {
 		log.Printf("Create booking error: %v", err)
@@ -455,16 +456,21 @@ func (h *Handler) handleMyBookings(ctx context.Context, msg *tgbotapi.Message, c
 	h.inst.SendMessage(msg.Chat.ID, "Ваши записи:")
 
 	for _, b := range bookings {
+		statusLabel := map[string]string{
+			models.StatusPending:   "⏳ Ожидает подтверждения",
+			models.StatusConfirmed: "✅ Подтверждена",
+		}[b.Status]
 		endsAt := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
 
 		info := fmt.Sprintf(
-			"📅 %s\n✂️ %s\n👤 Ваш мастер - %s\n🕐 %02d:%02d - %02d:%02d\n💰 %d ₸",
+			"📅 %s\n✂️ %s\n👤 Ваш мастер - %s\n🕐 %02d:%02d - %02d:%02d\n💰 %d ₸\n%s",
 			formatDateFull(b.StartsAt),
 			b.ServiceName,
 			master.Name,
 			b.StartsAt.Hour(), b.StartsAt.Minute(),
 			endsAt.Hour(), endsAt.Minute(),
 			b.ServicePrice,
+			statusLabel, // ← добавить
 		)
 
 		var rows [][]tgbotapi.InlineKeyboardButton

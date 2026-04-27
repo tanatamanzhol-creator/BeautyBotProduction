@@ -127,7 +127,17 @@ const (
 	StatusCancelledByClient = "cancelled_by_client"
 	StatusCancelledByMaster = "cancelled_by_master"
 	StatusCompleted         = "completed"
+	StatusExpired           = "expired"
 )
+
+func IsActiveStatus(status string) bool {
+	switch status {
+	case StatusPending, StatusConfirmed:
+		return true
+	default:
+		return false
+	}
+}
 
 // User session state for multi-step flows
 type PendingService struct {

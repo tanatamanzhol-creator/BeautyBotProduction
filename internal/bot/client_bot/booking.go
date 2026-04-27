@@ -330,13 +330,15 @@ func (h *Handler) showBookingConfirmation(ctx context.Context, chatID int64, use
 	}
 
 	text := fmt.Sprintf(
-		"Проверьте и подтвердите запись ✅\n\nИзменить или отменить запись можно за 12 часов до визита ⚠️\n\n"+
+		"Проверьте и подтвердите запись ✅\n\n"+
+			"Изменить или отменить запись можно за %s часов до визита ⚠️\n\n"+
 			"👤 <b>%s</b>\n"+
 			"📱 %s\n"+
 			"💅 %s\n"+
 			"📅 %s\n"+
 			"⏰ %s (%s)\n"+
 			"💰 %s",
+		h.inst.Master.CancelLimitHours,
 		client.Name, client.Phone,
 		svc.Name,
 		formatDateFull(startsAt),

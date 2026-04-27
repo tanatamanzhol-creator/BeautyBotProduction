@@ -605,11 +605,27 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.handleStats(ctx, chatID, "month")
 	case data == "stats_all":
 		h.handleStats(ctx, chatID, "all")
+	case strings.HasPrefix(data, "master_complete_"):
+		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "master_complete_"))
+		h.repos.Booking.MarkComplete(ctx, bookingID)
+		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
+			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
+		h.inst.API.Send(edit)
+		h.inst.SendMessage(chatID, "🏁 Запись завершена!")
+
+	case strings.HasPrefix(data, "master_cancel_"):
+		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "master_cancel_"))
+		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "")
+		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
+			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
+		h.inst.API.Send(edit)
+		h.inst.SendMessage(chatID, "❌ Запись отменена.")
+		h.notifyClientRejected(ctx, bookingID)
 	}
 }
 
 func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+	navKeyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("Сегодня", "sched_today"),
 			tgbotapi.NewInlineKeyboardButtonData("Завтра", "sched_tomorrow"),
@@ -618,19 +634,43 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 	)
 
 	if len(bookings) == 0 {
-		h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)), keyboard)
+		h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)), navKeyboard)
 		return
 	}
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n\n", formatDate(date)))
+
+	h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("<b>📅 %s</b>", formatDate(date)), navKeyboard)
+
 	total := 0
 	for _, b := range bookings {
-		sb.WriteString(fmt.Sprintf("⏰ <b>%s</b> — %s\n   💅 %s\n\n",
-			b.StartsAt.Format("15:04"), b.ClientName, b.ServiceName))
-		total += b.ServicePrice
+		statusLabel := map[string]string{
+			models.StatusPending:           "⏳ Ожидает подтверждения",
+			models.StatusConfirmed:         "✅ Подтверждена",
+			models.StatusCompleted:         "🏁 Завершена",
+			models.StatusCancelledByClient: "❌ Отменена клиентом",
+			models.StatusCancelledByMaster: "❌ Отменена мастером",
+		}[b.Status]
+
+		text := fmt.Sprintf("⏰ <b>%s</b> — %s\n💅 %s\n💰 %d ₸\n%s",
+			b.StartsAt.Format("15:04"), b.ClientName, b.ServiceName, b.ServicePrice, statusLabel)
+
+		var rows [][]tgbotapi.InlineKeyboardButton
+
+		if b.Status == models.StatusConfirmed {
+			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🏁 Завершить", fmt.Sprintf("master_complete_%d", b.ID)),
+				tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("master_cancel_%d", b.ID)),
+			))
+		}
+
+		kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
+		h.inst.SendWithInlineKeyboard(chatID, text, kb)
+
+		if models.IsActiveStatus(b.Status) {
+			total += b.ServicePrice
+		}
 	}
-	sb.WriteString(fmt.Sprintf("Итого: <b>%d</b> / ~%d ₸", len(bookings), total))
-	h.inst.SendWithInlineKeyboard(chatID, sb.String(), keyboard)
+
+	h.inst.SendMessage(chatID, fmt.Sprintf("Итого активных: <b>%d</b> / ~%d ₸", len(bookings), total))
 }
 
 func (h *Handler) showServiceActions(ctx context.Context, chatID int64, svcID int) {

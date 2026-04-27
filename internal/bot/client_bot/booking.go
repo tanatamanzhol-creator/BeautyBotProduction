@@ -459,7 +459,9 @@ func (h *Handler) handleMyBookings(ctx context.Context, msg *tgbotapi.Message, c
 		statusLabel := map[string]string{
 			models.StatusPending:   "⏳ Ожидает подтверждения",
 			models.StatusConfirmed: "✅ Подтверждена",
+			models.StatusCompleted: "🏁 Завершена",
 		}[b.Status]
+
 		endsAt := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
 
 		info := fmt.Sprintf(
@@ -470,26 +472,19 @@ func (h *Handler) handleMyBookings(ctx context.Context, msg *tgbotapi.Message, c
 			b.StartsAt.Hour(), b.StartsAt.Minute(),
 			endsAt.Hour(), endsAt.Minute(),
 			b.ServicePrice,
-			statusLabel, // ← добавить
+			statusLabel,
 		)
 
 		var rows [][]tgbotapi.InlineKeyboardButton
 
-		// 2. ПОТОМ действия
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
-				"❌ Отменить",
-				fmt.Sprintf("cancel_booking_%d", b.ID),
-			),
-			tgbotapi.NewInlineKeyboardButtonData(
-				"🔄 Перенести",
-				fmt.Sprintf("reschedule_%d", b.ID),
-			),
-		))
+		if b.Status == models.StatusConfirmed {
+			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("cancel_booking_%d", b.ID)),
+				tgbotapi.NewInlineKeyboardButtonData("🔄 Перенести", fmt.Sprintf("reschedule_%d", b.ID)),
+			))
+		}
 
-		keyboard := tgbotapi.NewInlineKeyboardMarkup(rows...)
-
-		h.inst.SendWithInlineKeyboard(msg.Chat.ID, info, keyboard)
+		h.inst.SendWithInlineKeyboard(msg.Chat.ID, info, tgbotapi.NewInlineKeyboardMarkup(rows...))
 	}
 }
 

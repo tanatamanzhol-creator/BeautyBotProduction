@@ -511,7 +511,8 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 			cb.Message.Text+"\n\n✅ Подтверждено")
 		edit.ParseMode = "HTML"
 		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{} // пустая — убирает кнопки
-		h.inst.API.Send(edit)
+		resp, err := h.inst.API.Send(edit)
+		log.Printf("EditMessage resp: %+v, err: %v", resp, err)
 
 	case strings.HasPrefix(data, "admin_reject_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "admin_reject_"))

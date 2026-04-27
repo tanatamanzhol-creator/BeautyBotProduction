@@ -493,7 +493,6 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	case strings.HasPrefix(data, "admin_confirm_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "admin_confirm_"))
 
-		// Проверяем что запись ещё pending
 		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
 		if err != nil {
 			return
@@ -506,13 +505,9 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.repos.Booking.Confirm(ctx, bookingID, "master")
 		h.notifyClientConfirmed(ctx, bookingID)
 
-		// Редактируем сообщение — убираем кнопки, добавляем статус
-		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID,
-			cb.Message.Text+"\n\n✅ Подтверждено")
-		edit.ParseMode = "HTML"
-		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{} // пустая — убирает кнопки
-		resp, err := h.inst.API.Send(edit)
-		log.Printf("EditMessage resp: %+v, err: %v", resp, err)
+		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
+			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
+		h.inst.API.Send(edit)
 
 	case strings.HasPrefix(data, "admin_reject_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "admin_reject_"))
@@ -529,10 +524,8 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "")
 		h.notifyClientRejected(ctx, bookingID)
 
-		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID,
-			cb.Message.Text+"\n\n❌ Отклонено")
-		edit.ParseMode = "HTML"
-		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{}
+		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
+			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
 		h.inst.API.Send(edit)
 	case strings.HasPrefix(data, "svc_edit_name_"):
 		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_name_"))

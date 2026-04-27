@@ -582,18 +582,40 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	case strings.HasPrefix(data, "master_complete_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "master_complete_"))
 		h.repos.Booking.MarkComplete(ctx, bookingID)
-		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
-			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
+
+		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+		if err != nil {
+			return
+		}
+
+		newText := fmt.Sprintf(
+			"⏰ <b>%s</b> — %s\n💅 %s\n📱 %s\n🏁 Завершена",
+			booking.StartsAt.Format("15:04"),
+			booking.ClientName, booking.ServiceName, booking.ClientPhone,
+		)
+		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID, newText)
+		edit.ParseMode = "HTML"
+		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
 		h.inst.API.Send(edit)
-		h.inst.SendMessage(chatID, "🏁 Запись завершена!")
 
 	case strings.HasPrefix(data, "master_cancel_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "master_cancel_"))
 		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "")
-		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
-			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
+
+		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+		if err != nil {
+			return
+		}
+
+		newText := fmt.Sprintf(
+			"⏰ <b>%s</b> — %s\n💅 %s\n📱 %s\n❌ Отменена мастером",
+			booking.StartsAt.Format("15:04"),
+			booking.ClientName, booking.ServiceName, booking.ClientPhone,
+		)
+		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID, newText)
+		edit.ParseMode = "HTML"
+		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
 		h.inst.API.Send(edit)
-		h.inst.SendMessage(chatID, "❌ Запись отменена.")
 		h.notifyClientRejected(ctx, bookingID)
 	}
 }

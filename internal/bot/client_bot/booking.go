@@ -24,9 +24,14 @@ func (h *Handler) handleBookingStartCallback(ctx context.Context, chatID int64, 
 	activeBookings, err := h.repos.Booking.GetActiveForClient(ctx, h.inst.Master.ID, client.ID)
 	if err == nil {
 		if len(activeBookings) >= 2 {
+			master := h.inst.Master
+
 			keyboard := tgbotapi.NewInlineKeyboardMarkup(
 				tgbotapi.NewInlineKeyboardRow(
-					tgbotapi.NewInlineKeyboardButtonData("💬 Написать мастеру", "back_to_menu"),
+					tgbotapi.NewInlineKeyboardButtonURL(
+						"Написать мастеру",
+						fmt.Sprintf("tg://user?id=%d", master.MasterTelegramID),
+					),
 				),
 			)
 			h.inst.SendWithInlineKeyboard(chatID,

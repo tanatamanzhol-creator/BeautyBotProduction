@@ -30,7 +30,7 @@ func (h *Handler) handleBookingStartCallback(ctx context.Context, chatID int64, 
 				),
 			)
 			h.inst.SendWithInlineKeyboard(chatID,
-				"У вас уже есть 2 активные записи.\nДля записи на новое время свяжитесь с мастером напрямую.", keyboard)
+				"У вас уже есть 2 активные записи.\nДля новой записи свяжитесь с мастером напрямую или отмените/перенести предстоящие записи.", keyboard)
 			return
 		}
 

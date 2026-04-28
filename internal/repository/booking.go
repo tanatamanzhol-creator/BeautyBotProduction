@@ -75,7 +75,7 @@ func (r *BookingRepo) GetUpcomingForClient(ctx context.Context, masterID, client
 		JOIN clients c ON c.id = b.client_id
 		JOIN services s ON s.id = b.service_id
 		WHERE b.master_id=$1 AND b.client_id=$2
-		  AND b.status NOT IN ('expired')
+		  AND b.status IN ('pending', 'confirmed')
 		  AND b.starts_at > NOW()
 		ORDER BY b.starts_at
 	`, masterID, clientID)

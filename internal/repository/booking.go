@@ -345,39 +345,28 @@ func scanBookings(rows interface {
 }
 
 func (r *BookingRepo) GetActiveForClient(ctx context.Context, masterID int, clientID int) ([]*models.Booking, error) {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
 	rows, err := r.db.Query(ctx, `
-        SELECT id, service_id, service_name, service_price, service_duration_min,
-               starts_at, status
-        FROM bookings
-        WHERE master_id = $1
-          AND client_id = $2
-          AND status IN ('pending', 'confirmed')
-        ORDER BY starts_at
-    `, masterID, clientID)
+		SELECT b.id, b.master_id, b.client_id, b.service_id,
+		       b.starts_at, b.ends_at, b.status,
+		       COALESCE(b.confirmed_by,''), COALESCE(b.cancel_reason,''),
+		       b.reminder_24h_sent, b.reminder_2h_sent, b.review_requested,
+		       b.created_at,
+		       COALESCE(c.name,''), COALESCE(c.phone,''), c.telegram_id,
+		       s.name, s.price, s.duration_min
+		FROM bookings b
+		JOIN clients c ON c.id = b.client_id
+		JOIN services s ON s.id = b.service_id
+		WHERE b.master_id = $1
+		  AND b.client_id = $2
+		  AND b.status IN ('pending', 'confirmed')
+		ORDER BY b.starts_at
+	`, masterID, clientID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var bookings []*models.Booking
-	for rows.Next() {
-		b := &models.Booking{}
-		err := rows.Scan(
-			&b.ID,
-			&b.ServiceID,
-			&b.ServiceName,
-			&b.ServicePrice,
-			&b.ServiceDurationMin,
-			&b.StartsAt,
-			&b.Status,
-		)
-		if err != nil {
-			return nil, err
-		}
-		bookings = append(bookings, b)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return bookings, nil
+	return scanBookings(rows)
 }

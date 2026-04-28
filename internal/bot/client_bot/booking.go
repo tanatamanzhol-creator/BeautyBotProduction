@@ -20,6 +20,55 @@ func (h *Handler) handleBookingStart(ctx context.Context, msg *tgbotapi.Message,
 }
 
 func (h *Handler) handleBookingStartCallback(ctx context.Context, chatID int64, client *models.Client) {
+	// Check active bookings
+	activeBookings, err := h.repos.Booking.GetActiveForClient(ctx, h.inst.Master.ID, client.ID)
+	if err == nil {
+		if len(activeBookings) >= 2 {
+			keyboard := tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("💬 Написать мастеру", "back_to_menu"),
+				),
+			)
+			h.inst.SendWithInlineKeyboard(chatID,
+				"У вас уже есть 2 активные записи.\nДля записи на новое время свяжитесь с мастером напрямую.", keyboard)
+			return
+		}
+
+		if len(activeBookings) == 1 {
+			b := activeBookings[0]
+			endsAt := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
+			text := fmt.Sprintf(
+				"У вас уже есть активная запись ⚠️\n\n"+
+					"💅 %s\n"+
+					"📅 %s\n"+
+					"🕐 %02d:%02d – %02d:%02d\n"+
+					"📌 %s\n\n"+
+					"Хотите создать вторую запись?",
+				b.ServiceName,
+				formatDateFull(b.StartsAt),
+				b.StartsAt.Hour(), b.StartsAt.Minute(),
+				endsAt.Hour(), endsAt.Minute(),
+				map[string]string{
+					models.StatusPending:   "⏳ Ожидает подтверждения",
+					models.StatusConfirmed: "✅ Подтверждена",
+				}[b.Status],
+			)
+			keyboard := tgbotapi.NewInlineKeyboardMarkup(
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("➕ Создать вторую запись", "booking_proceed"),
+				),
+				tgbotapi.NewInlineKeyboardRow(
+					tgbotapi.NewInlineKeyboardButtonData("← Назад", "back_to_menu"),
+				),
+			)
+			h.inst.SendWithInlineKeyboard(chatID, text, keyboard)
+			return
+		}
+	}
+	h.showBookingServices(ctx, chatID, client)
+}
+
+func (h *Handler) showBookingServices(ctx context.Context, chatID int64, client *models.Client) {
 	services, err := h.repos.Service.GetActive(ctx, h.inst.Master.ID)
 	if err != nil || len(services) == 0 {
 		text := "Мастер пока не добавил услуги.\nНапишите ему напрямую 💬"
@@ -32,7 +81,6 @@ func (h *Handler) handleBookingStartCallback(ctx context.Context, chatID int64, 
 		return
 	}
 
-	// Check if we need categories (9+ services)
 	cats, _ := h.repos.Service.GetCategories(ctx, h.inst.Master.ID)
 	if len(cats) > 0 {
 		h.showCategories(ctx, chatID, cats)

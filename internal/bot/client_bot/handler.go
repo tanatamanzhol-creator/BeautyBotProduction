@@ -185,6 +185,9 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	case data == "booking_start":
 		h.handleBookingStartCallback(ctx, chatID, client)
 
+	case data == "booking_proceed":
+		h.showBookingServices(ctx, chatID, client)
+
 	case strings.HasPrefix(data, "cat_"):
 		h.handleCategorySelected(ctx, chatID, userID, data)
 

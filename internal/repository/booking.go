@@ -343,3 +343,41 @@ func scanBookings(rows interface {
 	}
 	return bookings, nil
 }
+
+func (r *BookingRepo) GetActiveForClient(ctx context.Context, masterID int, clientID int) ([]*models.Booking, error) {
+	rows, err := r.db.Query(ctx, `
+        SELECT id, service_id, service_name, service_price, service_duration_min,
+               starts_at, status
+        FROM bookings
+        WHERE master_id = $1
+          AND client_id = $2
+          AND status IN ('pending', 'confirmed')
+        ORDER BY starts_at
+    `, masterID, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var bookings []*models.Booking
+	for rows.Next() {
+		b := &models.Booking{}
+		err := rows.Scan(
+			&b.ID,
+			&b.ServiceID,
+			&b.ServiceName,
+			&b.ServicePrice,
+			&b.ServiceDurationMin,
+			&b.StartsAt,
+			&b.Status,
+		)
+		if err != nil {
+			return nil, err
+		}
+		bookings = append(bookings, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return bookings, nil
+}

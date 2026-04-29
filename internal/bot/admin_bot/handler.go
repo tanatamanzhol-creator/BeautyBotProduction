@@ -448,13 +448,18 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 			))
 		}
 		h.inst.SendWithInlineKeyboard(chatID, "Выберите день:", tgbotapi.NewInlineKeyboardMarkup(rows...))
-	case strings.HasPrefix(data, "sched_day_"):
-		parts := strings.Split(strings.TrimPrefix(data, "sched_day_"), "-")
-		year, _ := strconv.Atoi(parts[0])
-		month, _ := strconv.Atoi(parts[1])
-		day, _ := strconv.Atoi(parts[2])
+	// case strings.HasPrefix(data, "sched_day_"):
+	// 	parts := strings.Split(strings.TrimPrefix(data, "sched_day_"), "-")
+	// 	year, _ := strconv.Atoi(parts[0])
+	// 	month, _ := strconv.Atoi(parts[1])
+	// 	day, _ := strconv.Atoi(parts[2])
 
-		date := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local)
+	// 	date := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local)
+	// 	bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
+	// 	h.showDaySchedule(ctx, chatID, date, bookings)
+	case strings.HasPrefix(data, "sched_day_"):
+		dateStr := strings.TrimPrefix(data, "sched_day_")
+		date, _ := time.Parse("2006-01-02", dateStr)
 		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
 		h.showDaySchedule(ctx, chatID, date, bookings)
 	case data == "broadcast_1m":
@@ -580,6 +585,17 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.handleStats(ctx, chatID, "month")
 	case data == "stats_all":
 		h.handleStats(ctx, chatID, "all")
+	case strings.HasPrefix(data, "sched_pending_"):
+		dateStr := strings.TrimPrefix(data, "sched_pending_")
+		date, _ := time.Parse("2006-01-02", dateStr)
+		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
+		h.showPendingBookings(ctx, chatID, date, bookings)
+
+	case strings.HasPrefix(data, "sched_cancelled_"):
+		dateStr := strings.TrimPrefix(data, "sched_cancelled_")
+		date, _ := time.Parse("2006-01-02", dateStr)
+		bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
+		h.showCancelledBookings(ctx, chatID, date, bookings)
 	case strings.HasPrefix(data, "master_complete_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "master_complete_"))
 		h.repos.Booking.MarkComplete(ctx, bookingID)
@@ -622,9 +638,41 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 }
 
 func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {
-	dateStr := date.Format("2006-01-02")
+	// Сортируем по времени
+	sort.Slice(bookings, func(i, j int) bool {
+		return bookings[i].StartsAt.Before(bookings[j].StartsAt)
+	})
 
-	navKeyboard := tgbotapi.NewInlineKeyboardMarkup(
+	// Группируем по статусу
+	var confirmed, completed, pending, cancelled []*models.Booking
+	var revenue int
+	for _, b := range bookings {
+		switch b.Status {
+		case models.StatusPending:
+			pending = append(pending, b)
+		case models.StatusConfirmed:
+			confirmed = append(confirmed, b)
+		case models.StatusCompleted:
+			completed = append(completed, b)
+			revenue += b.ServicePrice
+		case models.StatusCancelledByClient, models.StatusCancelledByMaster:
+			cancelled = append(cancelled, b)
+		}
+	}
+
+	// Сводка
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n\n", formatDate(date)))
+	sb.WriteString(fmt.Sprintf("✅ Подтверждено: <b>%d</b>\n", len(confirmed)))
+	sb.WriteString(fmt.Sprintf("🏁 Завершено: <b>%d</b>\n", len(completed)))
+	sb.WriteString(fmt.Sprintf("⏳ Ожидают подтверждения: <b>%d</b>\n", len(pending)))
+	sb.WriteString(fmt.Sprintf("❌ Отменено: <b>%d</b>\n", len(cancelled)))
+	if revenue > 0 {
+		sb.WriteString(fmt.Sprintf("\n💰 Выручка: <b>%d ₸</b>\n", revenue))
+	}
+
+	// Навигация
+	navRows := [][]tgbotapi.InlineKeyboardButton{
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("‹ Вчера", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
 			tgbotapi.NewInlineKeyboardButtonData("Сегодня", "sched_today"),
@@ -633,51 +681,42 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("📅 Выбрать день", "sched_select_month"),
 		),
-	)
+	}
+
+	// Кнопки разделов — только если есть записи
+	var sectionRows [][]tgbotapi.InlineKeyboardButton
+	if len(pending) > 0 {
+		sectionRows = append(sectionRows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(
+				fmt.Sprintf("⏳ Ожидают подтверждения (%d)", len(pending)),
+				fmt.Sprintf("sched_pending_%s", date.Format("2006-01-02")),
+			),
+		))
+	}
+	if len(cancelled) > 0 {
+		sectionRows = append(sectionRows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(
+				fmt.Sprintf("❌ Отменённые (%d)", len(cancelled)),
+				fmt.Sprintf("sched_cancelled_%s", date.Format("2006-01-02")),
+			),
+		))
+	}
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(append(sectionRows, navRows...)...)
 
 	if len(bookings) == 0 {
-		h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)), navKeyboard)
+		h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)), keyboard)
 		return
 	}
 
-	// Сортируем по времени начала
-	sort.Slice(bookings, func(i, j int) bool {
-		return bookings[i].StartsAt.Before(bookings[j].StartsAt)
-	})
+	// Отправляем сводку
+	h.inst.SendWithInlineKeyboard(chatID, sb.String(), keyboard)
 
-	// Считаем статистику
-	// Считаем статистику
-	var pending, confirmed, completed, cancelled int
-	var revenue int
-	for _, b := range bookings {
-		switch b.Status {
-		case models.StatusPending:
-			pending++
-		case models.StatusConfirmed:
-			confirmed++
-		case models.StatusCompleted:
-			completed++
-			revenue += b.ServicePrice
-		case models.StatusCancelledByClient, models.StatusCancelledByMaster:
-			cancelled++
-		}
-	}
-
-	// Формируем одно сообщение со всеми записями
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n", formatDate(date)))
-	sb.WriteString(fmt.Sprintf("⏳ %d  ✅ %d  🏁 %d  ❌ %d  · всего <b>%d</b>\n", pending, confirmed, completed, cancelled, len(bookings)))
-	if revenue > 0 {
-		sb.WriteString(fmt.Sprintf("Выручка: <b>%d ₸</b>\n", revenue))
-	}
-	sb.WriteString("\n")
-
-	for i, b := range bookings {
-		statusLabel := bookingStatusLabel(b.Status)
+	// Подтверждённые — каждая отдельным сообщением с кнопками
+	for i, b := range confirmed {
 		endTime := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
-
-		sb.WriteString(fmt.Sprintf(
-			"%d. <b>%s–%s</b> · %s\n    💅 %s\n    📱 %s · %d ₸\n    %s\n",
+		text := fmt.Sprintf(
+			"✅ <b>%d. %s–%s</b> · %s\n💅 %s\n📱 %s\n💰 %d ₸",
 			i+1,
 			b.StartsAt.Format("15:04"),
 			endTime.Format("15:04"),
@@ -685,46 +724,110 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 			b.ServiceName,
 			b.ClientPhone,
 			b.ServicePrice,
+		)
+		btnRow := tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🏁 Завершить", fmt.Sprintf("master_complete_%d", b.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("master_cancel_%d", b.ID)),
+		)
+		h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(btnRow))
+	}
+
+	// Завершённые — одним списком
+	if len(completed) > 0 {
+		var compSb strings.Builder
+		compSb.WriteString("🏁 <b>Завершённые:</b>\n\n")
+		for i, b := range completed {
+			compSb.WriteString(fmt.Sprintf(
+				"%d. %s · %s\n    💅 %s · %d ₸\n",
+				i+1,
+				b.StartsAt.Format("15:04"),
+				b.ClientName,
+				b.ServiceName,
+				b.ServicePrice,
+			))
+		}
+		h.inst.SendMessage(chatID, compSb.String())
+	}
+}
+
+// showPendingBookings — экран «Ожидают подтверждения»
+func (h *Handler) showPendingBookings(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {
+	backBtn := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("← Назад к расписанию", fmt.Sprintf("sched_day_%s", date.Format("2006-01-02"))),
+		),
+	)
+
+	var pending []*models.Booking
+	for _, b := range bookings {
+		if b.Status == models.StatusPending {
+			pending = append(pending, b)
+		}
+	}
+
+	if len(pending) == 0 {
+		h.inst.SendWithInlineKeyboard(chatID, "⏳ Нет записей, ожидающих подтверждения", backBtn)
+		return
+	}
+
+	h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("⏳ <b>Ожидают подтверждения — %s</b>", formatDate(date)), backBtn)
+
+	for _, b := range pending {
+		endTime := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
+		text := fmt.Sprintf(
+			"⏳ <b>%s–%s</b> · %s\n💅 %s\n📱 %s\n💰 %d ₸",
+			b.StartsAt.Format("15:04"),
+			endTime.Format("15:04"),
+			b.ClientName,
+			b.ServiceName,
+			b.ClientPhone,
+			b.ServicePrice,
+		)
+		btnRow := tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("✅ Подтвердить", fmt.Sprintf("master_confirm_%d", b.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("❌ Отклонить", fmt.Sprintf("master_cancel_%d", b.ID)),
+		)
+		h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(btnRow))
+	}
+}
+
+// showCancelledBookings — экран «Отменённые»
+func (h *Handler) showCancelledBookings(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {
+	backBtn := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("← Назад к расписанию", fmt.Sprintf("sched_day_%s", date.Format("2006-01-02"))),
+		),
+	)
+
+	var cancelled []*models.Booking
+	for _, b := range bookings {
+		if b.Status == models.StatusCancelledByClient || b.Status == models.StatusCancelledByMaster {
+			cancelled = append(cancelled, b)
+		}
+	}
+
+	if len(cancelled) == 0 {
+		h.inst.SendWithInlineKeyboard(chatID, "❌ Отменённых записей нет", backBtn)
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("❌ <b>Отменённые — %s</b>\n\n", formatDate(date)))
+
+	for i, b := range cancelled {
+		statusLabel := bookingStatusLabel(b.Status)
+		sb.WriteString(fmt.Sprintf(
+			"%d. %s · %s\n    💅 %s · %d ₸\n    %s\n\n",
+			i+1,
+			b.StartsAt.Format("15:04"),
+			b.ClientName,
+			b.ServiceName,
+			b.ServicePrice,
 			statusLabel,
 		))
-
-		if i < len(bookings)-1 {
-			sb.WriteString("\n")
-		}
 	}
 
-	// Строим кнопки: по одной строке на каждую подтверждённую запись
-	var actionRows [][]tgbotapi.InlineKeyboardButton
-	for i, b := range bookings {
-		if b.Status != models.StatusConfirmed {
-			continue
-		}
-		actionRows = append(actionRows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
-				fmt.Sprintf("🏁 Завершить #%d %s", i+1, b.StartsAt.Format("15:04")),
-				fmt.Sprintf("master_complete_%d", b.ID),
-			),
-			tgbotapi.NewInlineKeyboardButtonData(
-				fmt.Sprintf("❌ Отменить #%d", i+1),
-				fmt.Sprintf("master_cancel_%d", b.ID),
-			),
-		))
-	}
-
-	// Навигация всегда последней строкой
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(append(actionRows,
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("‹ Предыдущий день", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
-			tgbotapi.NewInlineKeyboardButtonData("Сегодня", "sched_today"),
-			tgbotapi.NewInlineKeyboardButtonData("Следующий день ›", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, 1).Format("2006-01-02"))),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("📅 Выбрать день", "sched_select_month"),
-		),
-	)...)
-
-	h.inst.SendWithInlineKeyboard(chatID, sb.String(), keyboard)
-	_ = dateStr // используется в callback-хендлере для sched_day_
+	h.inst.SendWithInlineKeyboard(chatID, sb.String(), backBtn)
 }
 
 func bookingStatusLabel(status string) string {

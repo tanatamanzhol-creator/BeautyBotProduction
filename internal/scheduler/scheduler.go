@@ -179,11 +179,6 @@ func (s *Scheduler) sendReviewRequests() {
 
 		s.repos.Booking.MarkReviewRequested(ctx, b.ID)
 
-		// Увеличиваем счётчик посещений
-		if err := s.repos.Client.IncrementVisitCount(ctx, b.ClientID, b.EndsAt); err != nil {
-			log.Printf("Failed to increment visit count for client %d: %v", b.ClientID, err)
-		}
-
 		log.Printf("Sent review request for booking %d", b.ID)
 	}
 

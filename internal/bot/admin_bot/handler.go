@@ -605,6 +605,11 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 			return
 		}
 
+		// Обновляем счётчик и дату последнего визита
+		if err := h.repos.Client.IncrementVisitCount(ctx, booking.ClientID, booking.EndsAt); err != nil {
+			log.Printf("Failed to increment visit count for client %d: %v", booking.ClientID, err)
+		}
+
 		newText := fmt.Sprintf(
 			"⏰ <b>%s</b> — %s\n💅 %s\n📱 %s\n🏁 Завершена",
 			booking.StartsAt.Format("15:04"),
@@ -614,7 +619,6 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		edit.ParseMode = "HTML"
 		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
 		h.inst.API.Send(edit)
-
 	case strings.HasPrefix(data, "master_cancel_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "master_cancel_"))
 		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "")

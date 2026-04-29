@@ -191,3 +191,22 @@ func (r *ClientRepo) IncrementVisitCount(ctx context.Context, clientID int, last
     `, clientID, lastVisitAt)
 	return err
 }
+
+func (r *ClientRepo) RecalcVisitStats(ctx context.Context, clientID int) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	_, err := r.db.Exec(ctx, `
+        UPDATE clients SET
+            visit_count = (
+                SELECT COUNT(*) FROM bookings
+                WHERE client_id = $1 AND status = 'completed'
+            ),
+            last_visit_at = (
+                SELECT MAX(ends_at) FROM bookings
+                WHERE client_id = $1 AND status = 'completed'
+            )
+        WHERE id = $1
+    `, clientID)
+	return err
+}

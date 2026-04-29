@@ -606,8 +606,8 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		}
 
 		// Обновляем счётчик и дату последнего визита
-		if err := h.repos.Client.IncrementVisitCount(ctx, booking.ClientID, booking.EndsAt); err != nil {
-			log.Printf("Failed to increment visit count for client %d: %v", booking.ClientID, err)
+		if err := h.repos.Client.RecalcVisitStats(ctx, booking.ClientID); err != nil {
+			log.Printf("Failed to recalc visit stats for client %d: %v", booking.ClientID, err)
 		}
 
 		newText := fmt.Sprintf(

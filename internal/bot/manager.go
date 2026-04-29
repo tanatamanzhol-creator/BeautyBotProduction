@@ -222,7 +222,10 @@ func (m *Manager) NotifyClientRejected(masterID int, booking *models.Booking, re
 	if inst == nil {
 		return
 	}
-	text := fmt.Sprintf("К сожалению, мастер не может принять вас в это время %v 😔", booking.StartsAt)
+	text := fmt.Sprintf(
+		"К сожалению, мастер не может принять вас в это время %s 😔",
+		booking.StartsAt.Format("02.01.2006 15:04"),
+	)
 	if reason != "" {
 		text += "\n\n" + reason
 	}

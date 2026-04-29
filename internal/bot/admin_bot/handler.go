@@ -671,19 +671,18 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		sb.WriteString(fmt.Sprintf("\n💰 Выручка: <b>%d ₸</b>\n", revenue))
 	}
 
-	// Навигация
+	// Навигация и кнопки разделов — будут в конце
 	navRows := [][]tgbotapi.InlineKeyboardButton{
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("‹ Предыдущий день", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
+			tgbotapi.NewInlineKeyboardButtonData("‹ Вчера", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
 			tgbotapi.NewInlineKeyboardButtonData("Сегодня", "sched_today"),
-			tgbotapi.NewInlineKeyboardButtonData("Следующий день ›", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, 1).Format("2006-01-02"))),
+			tgbotapi.NewInlineKeyboardButtonData("Завтра ›", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, 1).Format("2006-01-02"))),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("📅 Выбрать день", "sched_select_month"),
 		),
 	}
 
-	// Кнопки разделов — только если есть записи
 	var sectionRows [][]tgbotapi.InlineKeyboardButton
 	if len(pending) > 0 {
 		sectionRows = append(sectionRows, tgbotapi.NewInlineKeyboardRow(
@@ -702,17 +701,17 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		))
 	}
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(append(sectionRows, navRows...)...)
+	bottomKeyboard := tgbotapi.NewInlineKeyboardMarkup(append(sectionRows, navRows...)...)
 
 	if len(bookings) == 0 {
-		h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)), keyboard)
+		h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("На %s записей нет 🌿", formatDate(date)), bottomKeyboard)
 		return
 	}
 
-	// Отправляем сводку
-	h.inst.SendWithInlineKeyboard(chatID, sb.String(), keyboard)
+	// 1. Отправляем сводку — без кнопок
+	h.inst.SendMessage(chatID, sb.String())
 
-	// Подтверждённые — каждая отдельным сообщением с кнопками
+	// 2. Подтверждённые — каждая отдельным сообщением с кнопками
 	for i, b := range confirmed {
 		endTime := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
 		text := fmt.Sprintf(
@@ -732,7 +731,7 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(btnRow))
 	}
 
-	// Завершённые — одним списком
+	// 3. Завершённые — одним списком
 	if len(completed) > 0 {
 		var compSb strings.Builder
 		compSb.WriteString("🏁 <b>Завершённые:</b>\n\n")
@@ -748,6 +747,9 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		}
 		h.inst.SendMessage(chatID, compSb.String())
 	}
+
+	// 4. Кнопки отменённых и навигация по датам
+	h.inst.SendWithInlineKeyboard(chatID, "🗓 Навигация", bottomKeyboard)
 }
 
 // showPendingBookings — экран «Ожидают подтверждения»

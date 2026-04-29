@@ -711,9 +711,9 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 	// Навигация всегда последней строкой
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(append(actionRows,
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("‹ Вчера", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
+			tgbotapi.NewInlineKeyboardButtonData("‹ Предыдущий день", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
 			tgbotapi.NewInlineKeyboardButtonData("Сегодня", "sched_today"),
-			tgbotapi.NewInlineKeyboardButtonData("Завтра ›", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, 1).Format("2006-01-02"))),
+			tgbotapi.NewInlineKeyboardButtonData("Следующий день ›", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, 1).Format("2006-01-02"))),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("📅 Выбрать день", "sched_select_month"),

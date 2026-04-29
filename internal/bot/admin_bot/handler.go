@@ -784,8 +784,8 @@ func (h *Handler) showPendingBookings(ctx context.Context, chatID int64, date ti
 			b.ServicePrice,
 		)
 		btnRow := tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Подтвердить", fmt.Sprintf("master_confirm_%d", b.ID)),
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отклонить", fmt.Sprintf("master_cancel_%d", b.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("✅ Подтвердить", fmt.Sprintf("admin_confirm_%d", b.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("❌ Отклонить", fmt.Sprintf("admin_reject_%d", b.ID)),
 		)
 		h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(btnRow))
 	}

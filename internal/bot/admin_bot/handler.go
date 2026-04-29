@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -621,11 +622,16 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 }
 
 func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {
+	dateStr := date.Format("2006-01-02")
+
 	navKeyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("‹ Вчера", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
 			tgbotapi.NewInlineKeyboardButtonData("Сегодня", "sched_today"),
-			tgbotapi.NewInlineKeyboardButtonData("Завтра", "sched_tomorrow"),
-			tgbotapi.NewInlineKeyboardButtonData("Выбрать день", "sched_select_month"),
+			tgbotapi.NewInlineKeyboardButtonData("Завтра ›", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, 1).Format("2006-01-02"))),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📅 Выбрать день", "sched_select_month"),
 		),
 	)
 
@@ -634,43 +640,106 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		return
 	}
 
-	h.inst.SendWithInlineKeyboard(chatID, fmt.Sprintf("<b>📅 %s</b>", formatDate(date)), navKeyboard)
+	// Сортируем по времени начала
+	sort.Slice(bookings, func(i, j int) bool {
+		return bookings[i].StartsAt.Before(bookings[j].StartsAt)
+	})
 
-	total := 0
+	// Считаем статистику
+	var confirmed, completed, cancelled int
+	var revenue int
 	for _, b := range bookings {
-		statusLabel := map[string]string{
-			models.StatusPending:           "⏳ Ожидает подтверждения",
-			models.StatusConfirmed:         "✅ Подтверждена",
-			models.StatusCompleted:         "🏁 Завершена",
-			models.StatusCancelledByClient: "❌ Отменена клиентом",
-			models.StatusCancelledByMaster: "❌ Отменена мастером",
-		}[b.Status]
-
-		text := fmt.Sprintf(
-			"⏰ <b>%s</b> — %s\n💅 %s\n📱 %s\n%s",
-			b.StartsAt.Format("15:04"),
-			b.ClientName, b.ServiceName, b.ClientPhone,
-			statusLabel,
-		)
-
-		var rows [][]tgbotapi.InlineKeyboardButton
-		if b.Status == models.StatusConfirmed {
-			rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("🏁 Завершить", fmt.Sprintf("master_complete_%d", b.ID)),
-				tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("master_cancel_%d", b.ID)),
-			))
-		}
-
-		h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(rows...))
-
-		if b.Status == models.StatusConfirmed || b.Status == models.StatusCompleted {
-			total += b.ServicePrice
+		switch b.Status {
+		case models.StatusConfirmed:
+			confirmed++
+		case models.StatusCompleted:
+			completed++
+			revenue += b.ServicePrice
+		case models.StatusCancelledByClient, models.StatusCancelledByMaster:
+			cancelled++
 		}
 	}
 
-	h.inst.SendMessage(chatID, fmt.Sprintf("Итого: <b>%d записей</b> / ~%d ₸", len(bookings), total))
+	// Формируем одно сообщение со всеми записями
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n", formatDate(date)))
+	sb.WriteString(fmt.Sprintf("Записей: <b>%d</b>  ✅ %d  🏁 %d  ❌ %d\n", len(bookings), confirmed, completed, cancelled))
+	if revenue > 0 {
+		sb.WriteString(fmt.Sprintf("Выручка: <b>%d ₸</b>\n", revenue))
+	}
+	sb.WriteString("\n")
+
+	for i, b := range bookings {
+		statusLabel := bookingStatusLabel(b.Status)
+		endTime := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
+
+		sb.WriteString(fmt.Sprintf(
+			"%d. <b>%s–%s</b> · %s\n    💅 %s\n    📱 %s · %d ₸\n    %s\n",
+			i+1,
+			b.StartsAt.Format("15:04"),
+			endTime.Format("15:04"),
+			b.ClientName,
+			b.ServiceName,
+			b.ClientPhone,
+			b.ServicePrice,
+			statusLabel,
+		))
+
+		if i < len(bookings)-1 {
+			sb.WriteString("\n")
+		}
+	}
+
+	// Строим кнопки: по одной строке на каждую подтверждённую запись
+	var actionRows [][]tgbotapi.InlineKeyboardButton
+	for i, b := range bookings {
+		if b.Status != models.StatusConfirmed {
+			continue
+		}
+		actionRows = append(actionRows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(
+				fmt.Sprintf("🏁 Завершить #%d %s", i+1, b.StartsAt.Format("15:04")),
+				fmt.Sprintf("master_complete_%d", b.ID),
+			),
+			tgbotapi.NewInlineKeyboardButtonData(
+				fmt.Sprintf("❌ Отменить #%d", i+1),
+				fmt.Sprintf("master_cancel_%d", b.ID),
+			),
+		))
+	}
+
+	// Навигация всегда последней строкой
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(append(actionRows,
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("‹ Вчера", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
+			tgbotapi.NewInlineKeyboardButtonData("Сегодня", "sched_today"),
+			tgbotapi.NewInlineKeyboardButtonData("Завтра ›", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, 1).Format("2006-01-02"))),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📅 Выбрать день", "sched_select_month"),
+		),
+	)...)
+
+	h.inst.SendWithInlineKeyboard(chatID, sb.String(), keyboard)
+	_ = dateStr // используется в callback-хендлере для sched_day_
 }
 
+func bookingStatusLabel(status string) string {
+	switch status {
+	case models.StatusPending:
+		return "⏳ Ожидает подтверждения"
+	case models.StatusConfirmed:
+		return "✅ Подтверждена"
+	case models.StatusCompleted:
+		return "🏁 Завершена"
+	case models.StatusCancelledByClient:
+		return "❌ Отменена клиентом"
+	case models.StatusCancelledByMaster:
+		return "❌ Отменена мастером"
+	default:
+		return "❓ Неизвестный статус"
+	}
+}
 func (h *Handler) showServiceActions(ctx context.Context, chatID int64, svcID int) {
 	svc, err := h.repos.Service.GetByID(ctx, svcID)
 	if err != nil {

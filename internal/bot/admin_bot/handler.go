@@ -646,10 +646,13 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 	})
 
 	// Считаем статистику
-	var confirmed, completed, cancelled int
+	// Считаем статистику
+	var pending, confirmed, completed, cancelled int
 	var revenue int
 	for _, b := range bookings {
 		switch b.Status {
+		case models.StatusPending:
+			pending++
 		case models.StatusConfirmed:
 			confirmed++
 		case models.StatusCompleted:
@@ -663,7 +666,7 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 	// Формируем одно сообщение со всеми записями
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n", formatDate(date)))
-	sb.WriteString(fmt.Sprintf("Записей: <b>%d</b>  ✅ %d  🏁 %d  ❌ %d\n", len(bookings), confirmed, completed, cancelled))
+	sb.WriteString(fmt.Sprintf("⏳ %d  ✅ %d  🏁 %d  ❌ %d  · всего <b>%d</b>\n", pending, confirmed, completed, cancelled, len(bookings)))
 	if revenue > 0 {
 		sb.WriteString(fmt.Sprintf("Выручка: <b>%d ₸</b>\n", revenue))
 	}

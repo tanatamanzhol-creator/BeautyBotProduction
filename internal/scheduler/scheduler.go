@@ -194,7 +194,7 @@ func (s *Scheduler) sendDailySchedule() {
 			continue
 		}
 
-		bookings, err := s.repos.Booking.GetForDay(ctx, master.ID, time.Now())
+		bookings, err := s.repos.Booking.GetActiveForDay(ctx, master.ID, time.Now())
 		if err != nil || len(bookings) == 0 {
 			continue
 		}

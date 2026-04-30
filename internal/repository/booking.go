@@ -85,6 +85,35 @@ func (r *BookingRepo) GetUpcomingForClient(ctx context.Context, masterID, client
 	defer rows.Close()
 	return scanBookings(rows)
 }
+func (r *BookingRepo) GetActiveForDay(ctx context.Context, masterID int, date time.Time) ([]*models.Booking, error) {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	dayEnd := dayStart.Add(24 * time.Hour)
+
+	rows, err := r.db.Query(ctx, `
+		SELECT b.id, b.master_id, b.client_id, b.service_id,
+		       b.starts_at, b.ends_at, b.status,
+		       COALESCE(b.confirmed_by,''), COALESCE(b.cancel_reason,''),
+		       b.reminder_24h_sent, b.reminder_2h_sent, b.review_requested,
+		       b.created_at,
+		       COALESCE(c.name,''), COALESCE(c.phone,''), c.telegram_id,
+		       s.name, s.price, s.duration_min
+		FROM bookings b
+		JOIN clients c ON c.id = b.client_id
+		JOIN services s ON s.id = b.service_id
+		WHERE b.master_id=$1
+		  AND b.starts_at >= $2 AND b.starts_at < $3
+		  AND b.status IN ('confirmed', 'pending')
+		ORDER BY b.starts_at
+	`, masterID, dayStart, dayEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanBookings(rows)
+}
 
 func (r *BookingRepo) GetForDay(ctx context.Context, masterID int, date time.Time) ([]*models.Booking, error) {
 	ctx, cancel := db.NewContext(ctx)

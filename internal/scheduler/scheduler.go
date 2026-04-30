@@ -41,7 +41,7 @@ func (s *Scheduler) Start() {
 	s.cron.AddFunc("*/10 * * * *", func() { s.sendReviewRequests() })
 
 	// Daily schedule to masters at 8:00
-	s.cron.AddFunc("31 11 * * *", func() { s.sendDailySchedule() })
+	s.cron.AddFunc("0 8 * * *", func() { s.sendDailySchedule() })
 
 	s.cron.Start()
 	log.Println("Scheduler started")
@@ -202,8 +202,16 @@ func (s *Scheduler) sendDailySchedule() {
 		text := "📋 <b>Ваши записи на сегодня:</b>\n\n"
 		total := 0
 		for _, b := range bookings {
-			text += fmt.Sprintf("⏰ <b>%s</b> — %s\n   💅 %s\n\n",
-				b.StartsAt.Format("15:04"), b.ClientName, b.ServiceName)
+			var statusIcon string
+			switch b.Status {
+			case "confirmed":
+				statusIcon = "✅"
+			case "pending":
+				statusIcon = "⏳"
+			}
+
+			text += fmt.Sprintf("⏰ <b>%s</b> — %s %s\n   💅 %s\n\n",
+				b.StartsAt.Format("15:04"), b.ClientName, statusIcon, b.ServiceName)
 			total += b.ServicePrice
 		}
 		text += fmt.Sprintf("Всего: <b>%d клиентов</b> / ~%d ₸ 💪", len(bookings), total)

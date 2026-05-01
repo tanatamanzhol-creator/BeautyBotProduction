@@ -58,7 +58,7 @@ func (h *Handler) handleBlockDayConfirm(ctx context.Context, chatID int64, dateS
 	}
 
 	// Check if there are bookings on this day
-	bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
+	bookings, _ := h.repos.Booking.GetActiveForDay(ctx, h.inst.Master.ID, date)
 	if len(bookings) > 0 {
 		var names []string
 		for _, b := range bookings {

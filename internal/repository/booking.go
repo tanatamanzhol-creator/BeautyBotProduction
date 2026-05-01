@@ -391,6 +391,7 @@ func (r *BookingRepo) GetActiveForClient(ctx context.Context, masterID int, clie
 		WHERE b.master_id = $1
 		  AND b.client_id = $2
 		  AND b.status IN ('pending', 'confirmed')
+		  AND b.starts_at > NOW()
 		ORDER BY b.starts_at
 	`, masterID, clientID)
 	if err != nil {

@@ -156,26 +156,90 @@ func (h *Handler) handleServices(ctx context.Context, chatID int64) {
 func (h *Handler) handleClients(ctx context.Context, chatID int64) {
 	clients, _ := h.repos.Client.GetAllForMaster(ctx, h.inst.Master.ID)
 
-	text := fmt.Sprintf("👥 <b>База клиентов</b> — %d человек\n\n", len(clients))
-	if len(clients) == 0 {
-		text += "Клиентов пока нет.\nПоделитесь ботом с клиентами! 🤍"
-	} else {
-		for i, c := range clients {
-			if i >= 10 {
-				text += fmt.Sprintf("\n...и ещё %d клиентов", len(clients)-10)
-				break
-			}
-
-			lastVisit := "—"
-			if c.LastVisitAt != nil {
-				lastVisit = c.LastVisitAt.Format("02.01.2006")
-			}
-
-			text += fmt.Sprintf("👤 <b>%s</b>\n📞 %s\n✅ Визитов: %d | 📅 Последний: %s\n\n",
-				c.Name, c.Phone, c.VisitCount, lastVisit)
+	total := len(clients)
+	blocked := 0
+	noBroadcast := 0
+	for _, c := range clients {
+		if c.IsBlocked {
+			blocked++
+		}
+		if c.NoBroadcast {
+			noBroadcast++
 		}
 	}
-	h.inst.SendMessage(chatID, text)
+
+	text := fmt.Sprintf(
+		"👥 <b>База клиентов</b>\n\n"+
+			"Всего: <b>%d</b>\n"+
+			"🚫 Заблокированных: <b>%d</b>\n"+
+			"🔕 Отписанных от рассылки: <b>%d</b>",
+		total, blocked, noBroadcast,
+	)
+
+	kb := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("📋 Список клиентов", "clients_list:0"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔕 Отписанные", "clients_no_broadcast"),
+			tgbotapi.NewInlineKeyboardButtonData("🚫 Заблокированные", "clients_blocked"),
+		),
+	)
+	h.inst.SendWithInlineKeyboard(chatID, text, kb)
+}
+
+func (h *Handler) handleClientsList(ctx context.Context, chatID int64, page int) {
+	clients, _ := h.repos.Client.GetAllForMaster(ctx, h.inst.Master.ID)
+
+	const pageSize = 5
+	total := len(clients)
+	start := page * pageSize
+	if start >= total {
+		start = 0
+		page = 0
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+
+	text := fmt.Sprintf("👥 <b>Клиенты</b> (стр. %d/%d)\n\n", page+1, (total+pageSize-1)/pageSize)
+	for _, c := range clients[start:end] {
+		lastVisit := "—"
+		if c.LastVisitAt != nil {
+			lastVisit = c.LastVisitAt.Format("02.01.2006")
+		}
+		flags := ""
+		if c.IsBlocked {
+			flags += " 🚫"
+		}
+		if c.NoBroadcast {
+			flags += " 🔕"
+		}
+
+		text += fmt.Sprintf("👤 <b>%s</b>%s\n📞 %s\n✅ Визитов: %d | 📅 %s\n\n",
+			c.Name, flags, c.Phone, c.VisitCount, lastVisit)
+	}
+
+	// Кнопки пагинации
+	var navRow []tgbotapi.InlineKeyboardButton
+	if page > 0 {
+		navRow = append(navRow, tgbotapi.NewInlineKeyboardButtonData("◀️", fmt.Sprintf("clients_list:%d", page-1)))
+	}
+	if end < total {
+		navRow = append(navRow, tgbotapi.NewInlineKeyboardButtonData("▶️", fmt.Sprintf("clients_list:%d", page+1)))
+	}
+
+	var rows [][]tgbotapi.InlineKeyboardButton
+	if len(navRow) > 0 {
+		rows = append(rows, navRow)
+	}
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "clients_menu"),
+	))
+
+	kb := tgbotapi.NewInlineKeyboardMarkup(rows...)
+	h.inst.SendWithInlineKeyboard(chatID, text, kb)
 }
 
 // ── Reviews ───────────────────────────────────────────────────────────────
@@ -638,7 +702,72 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
 		h.inst.API.Send(edit)
 		h.notifyClientRejected(ctx, bookingID)
+
+	case strings.HasPrefix(data, "clients_list:"):
+		page, _ := strconv.Atoi(strings.TrimPrefix(data, "clients_list:"))
+		h.handleClientsList(ctx, chatID, page)
+
+	case data == "clients_menu":
+		h.handleClients(ctx, chatID)
+
+	case data == "clients_blocked":
+		h.handleClientsFiltered(ctx, chatID, "blocked")
+
+	case data == "clients_no_broadcast":
+		h.handleClientsFiltered(ctx, chatID, "no_broadcast")
 	}
+}
+
+func (h *Handler) handleClientsFiltered(ctx context.Context, chatID int64, filter string) {
+	clients, _ := h.repos.Client.GetAllForMaster(ctx, h.inst.Master.ID)
+
+	var filtered []*models.Client
+	var title string
+
+	switch filter {
+	case "blocked":
+		title = "🚫 Заблокированные клиенты"
+		for _, c := range clients {
+			if c.IsBlocked {
+				filtered = append(filtered, c)
+			}
+		}
+	case "no_broadcast":
+		title = "🔕 Отписанные от рассылки"
+		for _, c := range clients {
+			if c.NoBroadcast {
+				filtered = append(filtered, c)
+			}
+		}
+	}
+
+	if len(filtered) == 0 {
+		text := fmt.Sprintf("%s\n\nТаких клиентов нет.", title)
+		kb := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "clients_menu"),
+			),
+		)
+		h.inst.SendWithInlineKeyboard(chatID, text, kb)
+		return
+	}
+
+	text := fmt.Sprintf("%s — %d\n\n", title, len(filtered))
+	for _, c := range filtered {
+		lastVisit := "—"
+		if c.LastVisitAt != nil {
+			lastVisit = c.LastVisitAt.Format("02.01.2006")
+		}
+		text += fmt.Sprintf("👤 <b>%s</b>\n📞 %s\n✅ Визитов: %d | 📅 %s\n\n",
+			c.Name, c.Phone, c.VisitCount, lastVisit)
+	}
+
+	kb := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "clients_menu"),
+		),
+	)
+	h.inst.SendWithInlineKeyboard(chatID, text, kb)
 }
 
 func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {

@@ -41,7 +41,7 @@ func (s *Scheduler) Start() {
 	s.cron.AddFunc("*/10 * * * *", func() { s.sendReviewRequests() })
 
 	// Daily schedule to masters at 8:00
-	s.cron.AddFunc("0 8 * * *", func() { s.sendDailySchedule() })
+	s.cron.AddFunc("19 8 * * *", func() { s.sendDailySchedule() })
 
 	s.cron.Start()
 	log.Println("Scheduler started")
@@ -195,26 +195,30 @@ func (s *Scheduler) sendDailySchedule() {
 		}
 
 		bookings, err := s.repos.Booking.GetActiveForDay(ctx, master.ID, time.Now())
-		if err != nil || len(bookings) == 0 {
+		if err != nil {
 			continue
 		}
 
-		text := "📋 <b>Ваши записи на сегодня:</b>\n\n"
-		total := 0
-		for _, b := range bookings {
-			var statusIcon string
-			switch b.Status {
-			case "confirmed":
-				statusIcon = "✅"
-			case "pending":
-				statusIcon = "⏳"
+		var text string
+		if len(bookings) == 0 {
+			text = "📋 <b>Ваши записи на сегодня:</b>\n\nНа сегодня нет предстоящих записей 🌿"
+		} else {
+			text = "📋 <b>Ваши записи на сегодня:</b>\n\n"
+			total := 0
+			for _, b := range bookings {
+				var statusIcon string
+				switch b.Status {
+				case "confirmed":
+					statusIcon = "✅"
+				case "pending":
+					statusIcon = "⏳"
+				}
+				text += fmt.Sprintf("⏰ <b>%s</b> — %s %s\n   💅 %s\n\n",
+					b.StartsAt.Format("15:04"), b.ClientName, statusIcon, b.ServiceName)
+				total += b.ServicePrice
 			}
-
-			text += fmt.Sprintf("⏰ <b>%s</b> — %s %s\n   💅 %s\n\n",
-				b.StartsAt.Format("15:04"), b.ClientName, statusIcon, b.ServiceName)
-			total += b.ServicePrice
+			text += fmt.Sprintf("Всего: <b>%d клиентов</b> / ~%d ₸ 💪", len(bookings), total)
 		}
-		text += fmt.Sprintf("Всего: <b>%d клиентов</b> / ~%d ₸ 💪", len(bookings), total)
 
 		adminInst := s.manager.GetAdminBot(master.ID)
 		if adminInst != nil {

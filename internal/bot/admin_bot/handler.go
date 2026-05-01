@@ -320,12 +320,8 @@ func (h *Handler) handleWorkSchedule(ctx context.Context, chatID int64) {
 	sb.WriteString("🕐 <b>Ваш рабочий график:</b>\n\n")
 	for i, day := range schedDays {
 		if day.Start != nil && day.End != nil {
-			sb.WriteString(fmt.Sprintf(
-				"%s: %s - %s ✅\n",
-				dayName[i],
-				day.Start.Format("15:04"),
-				day.End.Format("15:04"),
-			))
+			sb.WriteString(fmt.Sprintf("%s: %s - %s ✅\n",
+				dayName[i], day.Start.Format("15:04"), day.End.Format("15:04")))
 		} else {
 			sb.WriteString(fmt.Sprintf("%s: выходной ❌\n", dayName[i]))
 		}
@@ -335,7 +331,15 @@ func (h *Handler) handleWorkSchedule(ctx context.Context, chatID int64) {
 		master.SlotIntervalMin, master.MinHoursBeforeBooking, master.CancelLimitHours,
 	))
 
-	h.inst.SendMessage(chatID, sb.String())
+	kb := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🚫 Заблокировать время", "block_menu"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔓 Активные блокировки", "block_list"),
+		),
+	)
+	h.inst.SendWithInlineKeyboard(chatID, sb.String(), kb)
 }
 
 // ── Broadcast ─────────────────────────────────────────────────────────────
@@ -502,7 +506,6 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		year, _ := strconv.Atoi(parts[0])
 		month, _ := strconv.Atoi(parts[1])
 
-		// Генерируем дни выбранного месяца
 		daysInMonth := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.Local).Day()
 		var rows [][]tgbotapi.InlineKeyboardButton
 		for day := 1; day <= daysInMonth; day++ {
@@ -512,15 +515,6 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 			))
 		}
 		h.inst.SendWithInlineKeyboard(chatID, "Выберите день:", tgbotapi.NewInlineKeyboardMarkup(rows...))
-	// case strings.HasPrefix(data, "sched_day_"):
-	// 	parts := strings.Split(strings.TrimPrefix(data, "sched_day_"), "-")
-	// 	year, _ := strconv.Atoi(parts[0])
-	// 	month, _ := strconv.Atoi(parts[1])
-	// 	day, _ := strconv.Atoi(parts[2])
-
-	// 	date := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.Local)
-	// 	bookings, _ := h.repos.Booking.GetForDay(ctx, h.inst.Master.ID, date)
-	// 	h.showDaySchedule(ctx, chatID, date, bookings)
 	case strings.HasPrefix(data, "sched_day_"):
 		dateStr := strings.TrimPrefix(data, "sched_day_")
 		date, _ := time.Parse("2006-01-02", dateStr)
@@ -598,7 +592,6 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		h.inst.SendMessage(chatID, "Введите продолжительность в минутах:")
 
 	case strings.HasPrefix(data, "svc_edit_"):
-		// это уже существующий — меняем на showServiceEditMenu
 		svcID, _ := strconv.Atoi(strings.TrimPrefix(data, "svc_edit_"))
 		h.showServiceEditMenu(ctx, chatID, svcID)
 	case strings.HasPrefix(data, "svc_delete_"):
@@ -669,7 +662,6 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 			return
 		}
 
-		// Обновляем счётчик и дату последнего визита
 		if err := h.repos.Client.RecalcVisitStats(ctx, booking.ClientID); err != nil {
 			log.Printf("Failed to recalc visit stats for client %d: %v", booking.ClientID, err)
 		}
@@ -715,6 +707,26 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 
 	case data == "clients_no_broadcast":
 		h.handleClientsFiltered(ctx, chatID, "no_broadcast")
+
+	case data == "work_schedule":
+		h.handleWorkSchedule(ctx, chatID)
+
+	case data == "block_menu":
+		h.handleBlockSlots(ctx, chatID)
+
+	case data == "block_day":
+		h.handleBlockDay(ctx, chatID, userID)
+
+	case strings.HasPrefix(data, "block_day_confirm_"):
+		dateStr := strings.TrimPrefix(data, "block_day_confirm_")
+		h.handleBlockDayConfirm(ctx, chatID, dateStr)
+
+	case data == "block_list":
+		h.handleBlockList(ctx, chatID)
+
+	case strings.HasPrefix(data, "block_delete_"):
+		id, _ := strconv.Atoi(strings.TrimPrefix(data, "block_delete_"))
+		h.handleBlockDelete(ctx, chatID, id)
 	}
 }
 
@@ -1226,4 +1238,55 @@ func (h *Handler) finishEdit(ctx context.Context, chatID int64, userID int64, sv
 	h.inst.ClearSession(userID)
 	h.inst.SendMessage(chatID, "✅ Сохранено")
 	h.showServiceActions(ctx, chatID, svcID)
+}
+
+func (h *Handler) handleBlockList(ctx context.Context, chatID int64) {
+	slots, err := h.repos.BlockedSlot.GetUpcoming(ctx, h.inst.Master.ID)
+	if err != nil || len(slots) == 0 {
+		kb := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "work_schedule"),
+			),
+		)
+		h.inst.SendWithInlineKeyboard(chatID, "Активных блокировок нет ✅", kb)
+		return
+	}
+
+	text := "🚫 <b>Активные блокировки:</b>\n\n"
+	var rows [][]tgbotapi.InlineKeyboardButton
+	for _, s := range slots {
+		// Весь день
+		if s.StartsAt.Hour() == 0 && s.EndsAt.Sub(s.StartsAt).Hours() == 24 {
+			text += fmt.Sprintf("📅 %s — весь день\n", s.StartsAt.Format("02.01.2006"))
+		} else {
+			text += fmt.Sprintf("⏰ %s %s–%s\n",
+				s.StartsAt.Format("02.01"),
+				s.StartsAt.Format("15:04"),
+				s.EndsAt.Format("15:04"))
+		}
+		if s.Reason != "" {
+			text += fmt.Sprintf("   📝 %s\n", s.Reason)
+		}
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(
+				fmt.Sprintf("🔓 Снять %s", s.StartsAt.Format("02.01")),
+				fmt.Sprintf("block_delete_%d", s.ID),
+			),
+		))
+	}
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Назад", "work_schedule"),
+	))
+
+	h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(rows...))
+}
+
+func (h *Handler) handleBlockDelete(ctx context.Context, chatID int64, id int) {
+	err := h.repos.BlockedSlot.DeleteByID(ctx, id)
+	if err != nil {
+		h.inst.SendMessage(chatID, "Ошибка при снятии блокировки.")
+		return
+	}
+	h.inst.SendMessage(chatID, "Блокировка снята ✅")
+	h.handleBlockList(ctx, chatID)
 }

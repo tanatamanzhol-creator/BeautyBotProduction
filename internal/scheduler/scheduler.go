@@ -41,7 +41,7 @@ func (s *Scheduler) Start() {
 	s.cron.AddFunc("*/10 * * * *", func() { s.sendReviewRequests() })
 
 	// Daily schedule to masters at 8:00
-	s.cron.AddFunc("19 8 * * *", func() { s.sendDailySchedule() })
+	s.cron.AddFunc("0 8 * * *", func() { s.sendDailySchedule() })
 
 	s.cron.Start()
 	log.Println("Scheduler started")

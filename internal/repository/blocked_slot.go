@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"beauty-bot/internal/db"
+	"beauty-bot/internal/models"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,5 +39,38 @@ func (r *BlockedSlotRepo) DeleteForDay(ctx context.Context, masterID int, date t
 		DELETE FROM blocked_slots
 		WHERE master_id=$1 AND starts_at >= $2 AND ends_at <= $3
 	`, masterID, dayStart, dayEnd)
+	return err
+}
+func (r *BlockedSlotRepo) GetUpcoming(ctx context.Context, masterID int) ([]models.BlockedSlot, error) {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	rows, err := r.db.Query(ctx, `
+        SELECT id, master_id, starts_at, ends_at, COALESCE(reason,'')
+        FROM blocked_slots
+        WHERE master_id=$1 AND ends_at > NOW()
+        ORDER BY starts_at
+    `, masterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var slots []models.BlockedSlot
+	for rows.Next() {
+		var s models.BlockedSlot
+		if err := rows.Scan(&s.ID, &s.MasterID, &s.StartsAt, &s.EndsAt, &s.Reason); err != nil {
+			return nil, err
+		}
+		slots = append(slots, s)
+	}
+	return slots, nil
+}
+
+func (r *BlockedSlotRepo) DeleteByID(ctx context.Context, id int) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	_, err := r.db.Exec(ctx, `DELETE FROM blocked_slots WHERE id=$1`, id)
 	return err
 }

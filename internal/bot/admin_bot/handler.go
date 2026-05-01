@@ -727,6 +727,32 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	case strings.HasPrefix(data, "block_delete_"):
 		id, _ := strconv.Atoi(strings.TrimPrefix(data, "block_delete_"))
 		h.handleBlockDelete(ctx, chatID, id)
+
+	case data == "block_slot":
+		h.handleBlockSlot(ctx, chatID)
+
+	case strings.HasPrefix(data, "block_slot_day_"):
+		dateStr := strings.TrimPrefix(data, "block_slot_day_")
+		h.handleBlockSlotDay(ctx, chatID, dateStr)
+
+	case strings.HasPrefix(data, "block_slot_confirm_"):
+		parts := strings.SplitN(strings.TrimPrefix(data, "block_slot_confirm_"), "_", 2)
+		if len(parts) == 2 {
+			h.handleBlockSlotConfirm(ctx, chatID, parts[0], parts[1])
+		}
+
+	case data == "block_period":
+		h.handleBlockPeriod(ctx, chatID)
+
+	case strings.HasPrefix(data, "block_period_start_"):
+		startStr := strings.TrimPrefix(data, "block_period_start_")
+		h.handleBlockPeriodEnd(ctx, chatID, startStr)
+
+	case strings.HasPrefix(data, "block_period_confirm_"):
+		parts := strings.SplitN(strings.TrimPrefix(data, "block_period_confirm_"), "_", 2)
+		if len(parts) == 2 {
+			h.handleBlockPeriodConfirm(ctx, chatID, parts[0], parts[1])
+		}
 	}
 }
 

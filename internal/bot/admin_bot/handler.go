@@ -442,6 +442,10 @@ func (h *Handler) handleStats(ctx context.Context, chatID int64, period string) 
 
 	clients, _ := h.repos.Client.GetAllForMaster(ctx, h.inst.Master.ID)
 	reviews, _ := h.repos.Review.GetForPeriod(ctx, h.inst.Master.ID, start, end)
+	avgCheck := 0
+	if completed > 0 {
+		avgCheck = int(revenue) / completed
+	}
 
 	text := fmt.Sprintf(
 		"📊 <b>Статистика за %s</b>\n\n"+
@@ -449,11 +453,12 @@ func (h *Handler) handleStats(ctx context.Context, chatID int64, period string) 
 			"✅ Состоялось: <b>%d</b>\n"+
 			"❌ Отменено: <b>%d</b>\n\n"+
 			"💰 Выручка: <b>~%d ₸</b>\n\n"+
+			"📈 Средний чек: <b>~%d ₸</b>\n\n"+
 			"👥 Клиентов всего: <b>%d</b>\n"+
 			"⭐ Отзывов: <b>%d</b>",
 		periodLabel,
 		total, completed, cancelled,
-		revenue,
+		revenue, avgCheck,
 		len(clients),
 		len(reviews),
 	)

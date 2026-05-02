@@ -1,11 +1,13 @@
 package repository
 
 import (
+	"beauty-bot/internal/models"
 	"context"
 	"database/sql"
-	"beauty-bot/internal/models"
+	"time"
 
 	"beauty-bot/internal/db"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -52,35 +54,85 @@ LEFT JOIN services s ON s.id = b.service_id
 
 	var reviews []*models.Review
 	for rows.Next() {
-	var bookingID sql.NullInt64
+		var bookingID sql.NullInt64
 
-	rev := &models.Review{}
-	if err := rows.Scan(
-		&rev.ID,
-		&rev.MasterID,
-		&rev.ClientID,
-		&bookingID,
-		&rev.Text,
-		&rev.CreatedAt,
-		&rev.ClientName,
-		&rev.ServiceName,
-	); err != nil {
+		rev := &models.Review{}
+		if err := rows.Scan(
+			&rev.ID,
+			&rev.MasterID,
+			&rev.ClientID,
+			&bookingID,
+			&rev.Text,
+			&rev.CreatedAt,
+			&rev.ClientName,
+			&rev.ServiceName,
+		); err != nil {
+			return nil, err
+		}
+
+		// корректно обрабатываем NULL
+		if bookingID.Valid {
+			rev.BookingID = int(bookingID.Int64)
+		} else {
+			rev.BookingID = 0 // или можешь оставить как есть, если 0 по умолчанию ок
+		}
+
+		reviews = append(reviews, rev)
+	}
+
+	// 👇 обязательно добавь это после цикла
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	return reviews, nil
+}
 
-	// корректно обрабатываем NULL
-	if bookingID.Valid {
-		rev.BookingID = int(bookingID.Int64)
-	} else {
-		rev.BookingID = 0 // или можешь оставить как есть, если 0 по умолчанию ок
+func (r *ReviewRepo) GetForPeriod(ctx context.Context, masterID int, from, to time.Time) ([]*models.Review, error) {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	rows, err := r.db.Query(ctx, `
+		SELECT 
+			r.id, r.master_id, r.client_id, r.booking_id, 
+			r.text, r.created_at,
+			COALESCE(c.name, ''),
+			COALESCE(s.name, '')
+		FROM reviews r
+		LEFT JOIN clients c ON c.id = r.client_id
+		LEFT JOIN bookings b ON b.id = r.booking_id
+		LEFT JOIN services s ON s.id = b.service_id
+		WHERE r.master_id=$1
+		  AND r.created_at BETWEEN $2 AND $3
+		ORDER BY r.created_at DESC
+	`, masterID, from, to)
+	if err != nil {
+		return nil, err
 	}
+	defer rows.Close()
 
-	reviews = append(reviews, rev)
-}
-
-// 👇 обязательно добавь это после цикла
-if err := rows.Err(); err != nil {
-	return nil, err
-}
+	var reviews []*models.Review
+	for rows.Next() {
+		var bookingID sql.NullInt64
+		rev := &models.Review{}
+		if err := rows.Scan(
+			&rev.ID,
+			&rev.MasterID,
+			&rev.ClientID,
+			&bookingID,
+			&rev.Text,
+			&rev.CreatedAt,
+			&rev.ClientName,
+			&rev.ServiceName,
+		); err != nil {
+			return nil, err
+		}
+		if bookingID.Valid {
+			rev.BookingID = int(bookingID.Int64)
+		}
+		reviews = append(reviews, rev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return reviews, nil
 }

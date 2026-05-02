@@ -441,7 +441,7 @@ func (h *Handler) handleStats(ctx context.Context, chatID int64, period string) 
 	}
 
 	clients, _ := h.repos.Client.GetAllForMaster(ctx, h.inst.Master.ID)
-	reviews, _ := h.repos.Review.GetAllForMaster(ctx, h.inst.Master.ID)
+	reviews, _ := h.repos.Review.GetForPeriod(ctx, h.inst.Master.ID, start, end)
 
 	text := fmt.Sprintf(
 		"📊 <b>Статистика за %s</b>\n\n"+

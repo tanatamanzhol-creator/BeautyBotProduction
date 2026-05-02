@@ -101,10 +101,10 @@ func (h *Handler) sendMainMenu(ctx context.Context, chatID int64) {
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("🕐 График работы"),
 			tgbotapi.NewKeyboardButton("📊 Статистика"),
-
-			// tgbotapi.NewKeyboardButton("📢 Рассылка"),
 		),
-		// tgbotapi.NewKeyboardButtonRow(),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton("📢 Рассылка"),
+		),
 	)
 	keyboard.ResizeKeyboard = true
 	h.inst.SendWithReplyKeyboard(chatID, "Панель управления 🎛", keyboard)

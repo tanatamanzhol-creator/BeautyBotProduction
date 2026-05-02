@@ -368,23 +368,11 @@ func (h *Handler) handleBroadcastSegment(ctx context.Context, chatID int64, user
 
 	session := h.inst.GetSession(userID)
 	session.Step = models.StepAwaitBroadcastMsg
-	session.BroadcastMonths = months // сохраняем
+	session.BroadcastMonths = months
 	h.inst.SetSession(userID, session)
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("💌 Напоминание о себе", "tmpl_reminder"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🎁 Акция", "tmpl_promo"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✨ Новая услуга", "tmpl_new_service"),
-		),
-	)
-	h.inst.SendWithInlineKeyboard(chatID,
-		fmt.Sprintf("Клиентов в сегменте: <b>%d</b>\n\nВыберите шаблон или напишите сообщение:", len(clients)),
-		keyboard)
+	h.inst.SendMessage(chatID,
+		fmt.Sprintf("Клиентов в сегменте: <b>%d</b>\n\nНапишите текст рассылки:", len(clients)))
 }
 
 func (h *Handler) handleBroadcastMessage(ctx context.Context, msg *tgbotapi.Message, session *models.SessionState) {

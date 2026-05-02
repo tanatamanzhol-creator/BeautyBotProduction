@@ -452,8 +452,8 @@ func (h *Handler) handleStats(ctx context.Context, chatID int64, period string) 
 			"📅 Записей всего: <b>%d</b>\n"+
 			"✅ Состоялось: <b>%d</b>\n"+
 			"❌ Отменено: <b>%d</b>\n\n"+
-			"💰 Выручка: <b>~%d ₸</b>\n\n"+
-			"📈 Средний чек: <b>~%d ₸</b>\n\n"+
+			"💰 Выручка: <b>%d ₸</b>\n\n"+
+			"📈 Средний чек: <b>%d ₸</b>\n\n"+
 			"👥 Клиентов всего: <b>%d</b>\n"+
 			"⭐ Отзывов: <b>%d</b>",
 		periodLabel,

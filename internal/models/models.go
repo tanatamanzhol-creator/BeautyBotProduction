@@ -147,11 +147,13 @@ type PendingService struct {
 }
 
 type SessionState struct {
-	Step           string
-	ServiceID      int
-	Date           string // "2006-01-02"
-	BookingID      int    // for cancellation/reschedule
-	PendingService PendingService
+	Step            string
+	ServiceID       int
+	Date            string // "2006-01-02"
+	BookingID       int    // for cancellation/reschedule
+	PendingService  PendingService
+	BroadcastText   string
+	BroadcastMonths int
 }
 
 // Steps for client bot

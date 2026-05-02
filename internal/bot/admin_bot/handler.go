@@ -368,9 +368,9 @@ func (h *Handler) handleBroadcastSegment(ctx context.Context, chatID int64, user
 
 	session := h.inst.GetSession(userID)
 	session.Step = models.StepAwaitBroadcastMsg
+	session.BroadcastMonths = months // сохраняем
 	h.inst.SetSession(userID, session)
 
-	// Show templates
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("💌 Напоминание о себе", "tmpl_reminder"),
@@ -393,16 +393,17 @@ func (h *Handler) handleBroadcastMessage(ctx context.Context, msg *tgbotapi.Mess
 		return
 	}
 
+	session.BroadcastText = text
+	h.inst.SetSession(msg.From.ID, session)
+
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(
-				"✅ Отправить", fmt.Sprintf("broadcast_send_%s", text[:min(len(text), 50)])),
+			tgbotapi.NewInlineKeyboardButtonData("✅ Отправить", "broadcast_send"),
 			tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить", "broadcast_edit"),
 		),
 	)
-
-	preview := fmt.Sprintf("Предпросмотр:\n\n<i>%s</i>", text)
-	h.inst.SendWithInlineKeyboard(msg.Chat.ID, preview, keyboard)
+	h.inst.SendWithInlineKeyboard(msg.Chat.ID,
+		fmt.Sprintf("Предпросмотр:\n\n<i>%s</i>", text), keyboard)
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────
@@ -758,6 +759,22 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		if len(parts) == 2 {
 			h.handleBlockPeriodConfirm(ctx, chatID, parts[0], parts[1])
 		}
+	case data == "broadcast_send":
+		session := h.inst.GetSession(userID)
+		if session.BroadcastText == "" {
+			h.inst.SendMessage(chatID, "Текст рассылки не найден. Начните заново.")
+			return
+		}
+		h.executeBroadcast(ctx, chatID, userID, session.BroadcastText, session.BroadcastMonths)
+		session.BroadcastText = ""
+		session.BroadcastMonths = 0
+		h.inst.SetSession(userID, session)
+
+	case data == "broadcast_edit":
+		session := h.inst.GetSession(userID)
+		session.Step = models.StepAwaitBroadcastMsg
+		h.inst.SetSession(userID, session)
+		h.inst.SendMessage(chatID, "Введите новый текст рассылки:")
 	}
 }
 
@@ -1073,16 +1090,18 @@ func (h *Handler) handleTemplate(ctx context.Context, chatID int64, userID int64
 		return
 	}
 
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("✅ Отправить", fmt.Sprintf("broadcast_confirm_%d", userID)),
-			tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить", "broadcast_edit"),
-		),
-	)
+	// Сохраняем текст в сессию
 	session := h.inst.GetSession(userID)
+	session.BroadcastText = tmpl
 	session.Step = models.StepIdle
 	h.inst.SetSession(userID, session)
 
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("✅ Отправить", "broadcast_send"),
+			tgbotapi.NewInlineKeyboardButtonData("✏️ Изменить", "broadcast_edit"),
+		),
+	)
 	h.inst.SendWithInlineKeyboard(chatID,
 		fmt.Sprintf("Предпросмотр:\n\n<i>%s</i>", tmpl), keyboard)
 }

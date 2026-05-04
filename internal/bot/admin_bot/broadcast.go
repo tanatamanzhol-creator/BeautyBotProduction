@@ -40,7 +40,7 @@ func (h *Handler) executeBroadcast(ctx context.Context, chatID int64, userID int
 
 		// Check quiet hours
 		hour := time.Now().Hour()
-		if hour < 9 || hour >= 21 {
+		if hour < 5 || hour >= 21 {
 			failed++
 			continue
 		}

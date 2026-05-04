@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"beauty-bot/internal/bot"
+	"beauty-bot/internal/models"
 	"beauty-bot/internal/types"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -30,6 +31,9 @@ func New(manager *bot.Manager, repos *types.Repos) *Scheduler {
 func (s *Scheduler) Start() {
 	// Auto-confirm pending bookings older than 30 min
 	s.cron.AddFunc("*/5 * * * *", func() { s.autoConfirmPending() })
+
+	// Expire prepayments older than 60 min
+	s.cron.AddFunc("*/5 * * * *", func() { s.expirePendingPrepayments() })
 
 	// Send 24h reminders
 	s.cron.AddFunc("*/10 * * * *", func() { s.sendReminders24h() })
@@ -81,6 +85,57 @@ func (s *Scheduler) autoConfirmPending() {
 		}
 
 		log.Printf("Auto-confirmed booking %d", b.ID)
+	}
+}
+
+func (s *Scheduler) expirePendingPrepayments() {
+	ctx := context.Background()
+	before := time.Now().Add(-60 * time.Minute)
+
+	bookings, err := s.repos.Booking.GetPendingPrepayment(ctx, before)
+	if err != nil {
+		return
+	}
+
+	for _, b := range bookings {
+		// Отменяем запись
+		if err := s.repos.Booking.Cancel(ctx, b.ID, models.StatusCancelledByMaster, "Предоплата не получена вовремя"); err != nil {
+			continue
+		}
+		if err := s.repos.Booking.UpdatePrepaymentStatus(ctx, b.ID, "expired"); err != nil {
+			continue
+		}
+
+		// Уведомляем клиента
+		text := fmt.Sprintf(
+			"❌ Запись отменена\n\n"+
+				"💅 %s\n📅 %s — %s\n\n"+
+				"Предоплата не была получена в течение 60 минут.\n"+
+				"Вы можете записаться снова.",
+			b.ServiceName, formatDate(b.StartsAt), b.StartsAt.Format("15:04"),
+		)
+		kb := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("📅 Записаться снова", "booking_start"),
+			),
+		)
+		s.manager.SendToClient(b.MasterID, b.ClientTelegramID, text, &kb)
+
+		// Уведомляем мастера
+		master, err := s.repos.Master.GetByID(ctx, b.MasterID)
+		if err != nil {
+			continue
+		}
+		adminInst := s.manager.GetAdminBot(b.MasterID)
+		if adminInst != nil {
+			adminInst.SendMessage(master.MasterTelegramID,
+				fmt.Sprintf("⏰ Запись отменена — предоплата не получена\n\n👤 %s\n💅 %s\n📅 %s — %s",
+					b.ClientName, b.ServiceName,
+					formatDate(b.StartsAt), b.StartsAt.Format("15:04"),
+				))
+		}
+
+		log.Printf("Prepayment expired for booking %d", b.ID)
 	}
 }
 

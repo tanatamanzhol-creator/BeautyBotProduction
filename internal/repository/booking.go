@@ -216,7 +216,10 @@ func (r *BookingRepo) GetPendingForAutoConfirm(ctx context.Context, before time.
 		FROM bookings b
 		JOIN clients c ON c.id = b.client_id
 		JOIN services s ON s.id = b.service_id
-		WHERE b.status='pending' AND b.created_at < $1
+		JOIN masters m ON m.id = b.master_id
+		WHERE b.status='pending'
+		  AND b.created_at < $1
+		  AND m.prepayment_enabled = FALSE
 	`, before)
 	if err != nil {
 		return nil, err
@@ -224,7 +227,6 @@ func (r *BookingRepo) GetPendingForAutoConfirm(ctx context.Context, before time.
 	defer rows.Close()
 	return scanBookings(rows)
 }
-
 func (r *BookingRepo) GetNeedingReminder24h(ctx context.Context) ([]*models.Booking, error) {
 	ctx, cancel := db.NewContext(ctx)
 	defer cancel()
@@ -421,6 +423,41 @@ func (r *BookingRepo) GetForPeriod(ctx context.Context, masterID int, from, to t
 		  AND b.status IN ('confirmed', 'pending')
 		ORDER BY b.starts_at
 	`, masterID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanBookings(rows)
+}
+
+func (r *BookingRepo) UpdatePrepaymentStatus(ctx context.Context, id int, status string) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	_, err := r.db.Exec(ctx, `
+		UPDATE bookings SET prepayment_status=$2 WHERE id=$1
+	`, id, status)
+	return err
+}
+
+func (r *BookingRepo) GetPendingPrepayment(ctx context.Context, before time.Time) ([]*models.Booking, error) {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	rows, err := r.db.Query(ctx, `
+		SELECT b.id, b.master_id, b.client_id, b.service_id,
+		       b.starts_at, b.ends_at, b.status,
+		       COALESCE(b.confirmed_by,''), COALESCE(b.cancel_reason,''),
+		       b.reminder_24h_sent, b.reminder_2h_sent, b.review_requested,
+		       b.created_at,
+		       COALESCE(c.name,''), COALESCE(c.phone,''), c.telegram_id,
+		       s.name, s.price, s.duration_min
+		FROM bookings b
+		JOIN clients c ON c.id = b.client_id
+		JOIN services s ON s.id = b.service_id
+		WHERE b.prepayment_status='pending'
+		  AND b.created_at < $1
+	`, before)
 	if err != nil {
 		return nil, err
 	}

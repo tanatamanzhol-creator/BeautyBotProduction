@@ -66,6 +66,10 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 		h.handleEditServicePrice(ctx, msg)
 	case models.StepAwaitEditServiceDuration:
 		h.handleEditServiceDuration(ctx, msg)
+	case models.StepAwaitPrepaymentAmount:
+		h.handlePrepaymentAmount(ctx, msg, session)
+	case models.StepAwaitPrepaymentDetails:
+		h.handlePrepaymentDetails(ctx, msg, session)
 	default:
 		switch msg.Text {
 		case "📅 Расписание":
@@ -82,6 +86,8 @@ func (h *Handler) Handle(ctx context.Context, update tgbotapi.Update) {
 			h.handleBroadcast(ctx, msg.Chat.ID)
 		case "📊 Статистика":
 			h.handleStats(ctx, msg.Chat.ID, "month")
+		case "💳 Предоплата":
+			h.handlePrepaymentMenu(ctx, msg.Chat.ID)
 		default:
 			h.sendMainMenu(ctx, msg.Chat.ID)
 		}
@@ -104,6 +110,7 @@ func (h *Handler) sendMainMenu(ctx context.Context, chatID int64) {
 		),
 		tgbotapi.NewKeyboardButtonRow(
 			tgbotapi.NewKeyboardButton("📢 Рассылка"),
+			tgbotapi.NewKeyboardButton("💳 Предоплата"),
 		),
 	)
 	keyboard.ResizeKeyboard = true
@@ -765,6 +772,58 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		session.Step = models.StepAwaitBroadcastMsg
 		h.inst.SetSession(userID, session)
 		h.inst.SendMessage(chatID, "Введите новый текст рассылки:")
+	case data == "prepayment_toggle":
+		master := h.inst.Master
+		newEnabled := !master.PrepaymentEnabled
+		h.repos.Master.UpdatePrepayment(ctx, master.ID, newEnabled, master.PrepaymentAmount, master.PrepaymentDetails)
+		master.PrepaymentEnabled = newEnabled
+		h.handlePrepaymentMenu(ctx, chatID)
+
+	case data == "prepayment_set_amount":
+		session := h.inst.GetSession(userID)
+		session.Step = models.StepAwaitPrepaymentAmount
+		h.inst.SetSession(userID, session)
+		h.inst.SendMessage(chatID, "Введите сумму предоплаты в тенге:")
+
+	case data == "prepayment_set_details":
+		session := h.inst.GetSession(userID)
+		session.Step = models.StepAwaitPrepaymentDetails
+		h.inst.SetSession(userID, session)
+		h.inst.SendMessage(chatID, "Введите реквизиты для оплаты (номер карты, СБП, комментарий):")
+
+	case strings.HasPrefix(data, "prepayment_confirm_"):
+		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "prepayment_confirm_"))
+		h.repos.Booking.UpdatePrepaymentStatus(ctx, bookingID, "confirmed")
+		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+		if err != nil {
+			return
+		}
+		// Notify client
+		text := "✅ Предоплата подтверждена! Ваша запись закреплена."
+		h.inst.Notifier.SendToClient(h.inst.Master.ID, booking.ClientTelegramID, text, nil)
+
+		newText := cb.Message.Text + "\n\n✅ Оплата подтверждена"
+		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID, newText)
+		edit.ParseMode = "HTML"
+		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
+		h.inst.API.Send(edit)
+
+	case strings.HasPrefix(data, "prepayment_reject_"):
+		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "prepayment_reject_"))
+		h.repos.Booking.UpdatePrepaymentStatus(ctx, bookingID, "not_received")
+		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "Предоплата не получена")
+		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+		if err != nil {
+			return
+		}
+		text := "❌ Предоплата не подтверждена. Запись отменена."
+		h.inst.Notifier.SendToClient(h.inst.Master.ID, booking.ClientTelegramID, text, nil)
+
+		newText := cb.Message.Text + "\n\n❌ Оплата не получена, запись отменена"
+		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID, newText)
+		edit.ParseMode = "HTML"
+		edit.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}}
+		h.inst.API.Send(edit)
 	}
 }
 

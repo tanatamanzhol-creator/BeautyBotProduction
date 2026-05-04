@@ -174,19 +174,48 @@ func (m *Manager) NotifyClientConfirmed(masterID int, booking *models.Booking) {
 	}
 
 	ctx := context.Background()
-
 	master, _ := m.repos.Master.GetByID(ctx, masterID)
+	if master == nil {
+		return
+	}
 
+	// Если предоплата включена — запрашиваем оплату вместо подтверждения
+	if master.PrepaymentEnabled {
+		m.repos.Booking.UpdatePrepaymentStatus(ctx, booking.ID, "pending")
+
+		text := fmt.Sprintf(
+			"Мастер подтвердил запись! ✅\n\n"+
+				"💅 %s\n📅 %s — %s\n\n"+
+				"💳 Для закрепления записи необходимо внести предоплату <b>%d ₸</b>:\n\n"+
+				"<code>%s</code>\n\n"+
+				"⏰ У вас 60 минут. После оплаты нажмите кнопку ниже.",
+			booking.ServiceName,
+			formatDate(booking.StartsAt),
+			booking.StartsAt.Format("15:04"),
+			master.PrepaymentAmount,
+			master.PrepaymentDetails,
+		)
+
+		kb := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(
+					"✅ Я оплатил",
+					fmt.Sprintf("prepayment_claimed_%d", booking.ID),
+				),
+			),
+		)
+		inst.SendWithInlineKeyboard(booking.ClientTelegramID, text, kb)
+		return
+	}
+
+	// Стандартное подтверждение без предоплаты
 	addr := ""
-	if master != nil && master.Address != "" {
+	if master.Address != "" {
 		addr = "\n📍 " + master.Address
 	}
 
-	// ⏱ время до записи
 	durationUntil := time.Until(booking.StartsAt)
-
 	reminderText := ""
-
 	if durationUntil > 24*time.Hour {
 		reminderText = "\n\n⏰ Напомним за 24 часа 🔔"
 	} else if durationUntil > 2*time.Hour {
@@ -294,6 +323,20 @@ func (m *Manager) SendToClient(masterID int, clientTelegramID int64, text string
 		return fmt.Errorf("client bot not found for master %d", masterID)
 	}
 	msg := tgbotapi.NewMessage(clientTelegramID, text)
+	msg.ParseMode = "HTML"
+	if keyboard != nil {
+		msg.ReplyMarkup = keyboard
+	}
+	_, err := inst.API.Send(msg)
+	return err
+}
+
+func (m *Manager) SendToAdmin(masterID int, masterTelegramID int64, text string, keyboard *tgbotapi.InlineKeyboardMarkup) error {
+	inst := m.GetAdminBot(masterID)
+	if inst == nil {
+		return fmt.Errorf("admin bot not found for master %d", masterID)
+	}
+	msg := tgbotapi.NewMessage(masterTelegramID, text)
 	msg.ParseMode = "HTML"
 	if keyboard != nil {
 		msg.ReplyMarkup = keyboard

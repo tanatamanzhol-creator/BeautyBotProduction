@@ -24,6 +24,10 @@ type Master struct {
 	Longitude             float64
 	Latitude              float64
 	PoiID                 string
+	// Prepayment
+	PrepaymentEnabled bool
+	PrepaymentAmount  int
+	PrepaymentDetails string
 }
 
 type DaySchedule struct {
@@ -77,19 +81,20 @@ type Client struct {
 }
 
 type Booking struct {
-	ID              int
-	MasterID        int
-	ClientID        int
-	ServiceID       int
-	StartsAt        time.Time
-	EndsAt          time.Time
-	Status          string
-	ConfirmedBy     string
-	CancelReason    string
-	Reminder24hSent bool
-	Reminder2hSent  bool
-	ReviewRequested bool
-	CreatedAt       time.Time
+	ID               int
+	MasterID         int
+	ClientID         int
+	ServiceID        int
+	StartsAt         time.Time
+	EndsAt           time.Time
+	Status           string
+	ConfirmedBy      string
+	CancelReason     string
+	Reminder24hSent  bool
+	Reminder2hSent   bool
+	ReviewRequested  bool
+	CreatedAt        time.Time
+	PrepaymentStatus string
 	// Joined fields
 	ClientName         string
 	ClientPhone        string
@@ -154,19 +159,24 @@ type SessionState struct {
 	PendingService  PendingService
 	BroadcastText   string
 	BroadcastMonths int
+	// Prepayment setup
+	PrepaymentAmount  int
+	PrepaymentDetails string
 }
 
 // Steps for client bot
 const (
-	StepIdle           = ""
-	StepAwaitName      = "await_name"
-	StepAwaitPhone     = "await_phone"
-	StepSelectService  = "select_service"
-	StepSelectCategory = "select_category"
-	StepSelectDate     = "select_date"
-	StepSelectTime     = "select_time"
-	StepConfirmBooking = "confirm_booking"
-	StepAwaitReview    = "await_review"
+	StepIdle                   = ""
+	StepAwaitName              = "await_name"
+	StepAwaitPhone             = "await_phone"
+	StepSelectService          = "select_service"
+	StepSelectCategory         = "select_category"
+	StepSelectDate             = "select_date"
+	StepSelectTime             = "select_time"
+	StepConfirmBooking         = "confirm_booking"
+	StepAwaitReview            = "await_review"
+	StepAwaitPrepaymentAmount  = "await_prepayment_amount"
+	StepAwaitPrepaymentDetails = "await_prepayment_details"
 )
 
 // Admin bot steps

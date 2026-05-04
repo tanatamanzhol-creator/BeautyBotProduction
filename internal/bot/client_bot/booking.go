@@ -463,15 +463,25 @@ func (h *Handler) handleConfirmBooking(ctx context.Context, chatID int64, userID
 
 	h.inst.ClearSession(userID)
 
-	// Notify client
-	h.inst.SendMessage(chatID,
-		"Отлично! Заявка отправлена 🎉\nОжидайте подтверждения от мастера.\nОбычно это занимает несколько минут.")
+	// Уведомляем клиента с учётом предоплаты
+	master := h.inst.Master
+	if master.PrepaymentEnabled {
+		h.inst.SendMessage(chatID,
+			fmt.Sprintf("Отлично! Заявка отправлена 🎉\n\n"+
+				"⏳ Ожидайте подтверждения от мастера.\n\n"+
+				"💳 После подтверждения вам придут реквизиты для предоплаты <b>%d ₸</b>.",
+				master.PrepaymentAmount,
+			))
+	} else {
+		h.inst.SendMessage(chatID,
+			"Отлично! Заявка отправлена 🎉\nОжидайте подтверждения от мастера.\nОбычно это занимает несколько минут.")
+	}
+
 	h.sendMainMenu(ctx, chatID, "Главное меню 👇")
 
 	// Notify master via admin bot
 	h.notifyMasterNewBooking(ctx, bookingID, svc, client, startsAt)
 }
-
 func (h *Handler) notifyMasterNewBooking(ctx context.Context, bookingID int, svc *models.Service, client *models.Client, startsAt time.Time) {
 	master := h.inst.Master
 

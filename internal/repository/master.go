@@ -22,18 +22,19 @@ func (r *MasterRepo) GetAll(ctx context.Context) ([]*models.Master, error) {
 	defer cancel()
 
 	rows, err := r.db.Query(ctx, `
-		SELECT id, name, address, client_bot_token, admin_bot_token,
-		       COALESCE(client_bot_username,''), COALESCE(admin_bot_username,''),
-		       COALESCE(welcome_text,''), is_active,
-		       COALESCE(master_telegram_id, 0),
-		       trial_started_at, trial_ends_at, paid_until,
-		       slot_interval_min, min_hours_before_booking, cancel_limit_hours,
-		       mon_start, mon_end, tue_start, tue_end,
-		       wed_start, wed_end, thu_start, thu_end,
-		       fri_start, fri_end, sat_start, sat_end,
-		       sun_start, sun_end, created_at
-		FROM masters WHERE is_active = TRUE
-	`)
+    SELECT id, name, address, client_bot_token, admin_bot_token,
+           COALESCE(client_bot_username,''), COALESCE(admin_bot_username,''),
+           COALESCE(welcome_text,''), is_active,
+           COALESCE(master_telegram_id, 0),
+           trial_started_at, trial_ends_at, paid_until,
+           slot_interval_min, min_hours_before_booking, cancel_limit_hours,
+           mon_start, mon_end, tue_start, tue_end,
+           wed_start, wed_end, thu_start, thu_end,
+           fri_start, fri_end, sat_start, sat_end,
+           sun_start, sun_end, created_at,
+           prepayment_enabled, prepayment_amount, COALESCE(prepayment_details,'')
+    FROM masters WHERE is_active = TRUE
+`)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +57,7 @@ func (r *MasterRepo) GetAll(ctx context.Context) ([]*models.Master, error) {
 			&m.Schedule.Sat.Start, &m.Schedule.Sat.End,
 			&m.Schedule.Sun.Start, &m.Schedule.Sun.End,
 			&m.CreatedAt,
+			&m.PrepaymentEnabled, &m.PrepaymentAmount, &m.PrepaymentDetails,
 		)
 		if err != nil {
 			return nil, err
@@ -80,7 +82,8 @@ func (r *MasterRepo) GetByID(ctx context.Context, id int) (*models.Master, error
 		       mon_start, mon_end, tue_start, tue_end,
 		       wed_start, wed_end, thu_start, thu_end,
 		       fri_start, fri_end, sat_start, sat_end,
-		       sun_start, sun_end, COALESCE(latitude, 0), COALESCE(longitude, 0), COALESCE(poi_id, ''), created_at
+		       sun_start, sun_end, COALESCE(latitude, 0), COALESCE(longitude, 0), COALESCE(poi_id, ''), created_at,
+			   prepayment_enabled, prepayment_amount, COALESCE(prepayment_details,'')
 		FROM masters WHERE id = $1
 	`, id).Scan(
 		&m.ID, &m.Name, &m.Address, &m.ClientBotToken, &m.AdminBotToken,
@@ -99,6 +102,7 @@ func (r *MasterRepo) GetByID(ctx context.Context, id int) (*models.Master, error
 		&m.Longitude,
 		&m.PoiID,
 		&m.CreatedAt,
+		&m.PrepaymentEnabled, &m.PrepaymentAmount, &m.PrepaymentDetails,
 	)
 	return m, err
 }
@@ -146,5 +150,18 @@ func (r *MasterRepo) UpdateSettings(ctx context.Context, masterID, slotInterval,
 			cancel_limit_hours=$4
 		WHERE id = $1
 	`, masterID, slotInterval, minHours, cancelLimit)
+	return err
+}
+
+func (r *MasterRepo) UpdatePrepayment(ctx context.Context, masterID int, enabled bool, amount int, details string) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+	_, err := r.db.Exec(ctx, `
+        UPDATE masters SET
+            prepayment_enabled = $2,
+            prepayment_amount  = $3,
+            prepayment_details = $4
+        WHERE id = $1
+    `, masterID, enabled, amount, details)
 	return err
 }

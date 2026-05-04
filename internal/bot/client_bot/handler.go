@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 
 	"beauty-bot/internal/models"
@@ -228,6 +229,38 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 		session.Step = models.StepAwaitReview
 		h.inst.SetSession(userID, session)
 		h.inst.SendMessage(chatID, "Напишите ваш отзыв ✏️\n\nМастер обязательно прочитает его 🤍")
+	case strings.HasPrefix(data, "prepayment_claimed_"):
+		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "prepayment_claimed_"))
+		h.repos.Booking.UpdatePrepaymentStatus(ctx, bookingID, "claimed")
+
+		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
+		if err != nil {
+			return
+		}
+
+		// Уведомляем клиента
+		h.inst.SendMessage(chatID, "✅ Спасибо! Ожидайте подтверждения оплаты от мастера.")
+
+		// Убираем кнопку
+		edit := tgbotapi.NewEditMessageReplyMarkup(chatID, cb.Message.MessageID,
+			tgbotapi.InlineKeyboardMarkup{InlineKeyboard: [][]tgbotapi.InlineKeyboardButton{}})
+		h.inst.API.Send(edit)
+
+		// Уведомляем мастера
+		text := fmt.Sprintf(
+			"💳 Клиент сообщил об оплате\n\n"+
+				"👤 %s\n💅 %s\n📅 %s — %s\n\n"+
+				"Проверьте поступление и подтвердите:",
+			booking.ClientName, booking.ServiceName,
+			formatDate(booking.StartsAt), booking.StartsAt.Format("15:04"),
+		)
+		kb := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("✅ Оплата получена", fmt.Sprintf("prepayment_confirm_%d", bookingID)),
+				tgbotapi.NewInlineKeyboardButtonData("❌ Не получена", fmt.Sprintf("prepayment_reject_%d", bookingID)),
+			),
+		)
+		h.inst.Notifier.SendToAdmin(h.inst.Master.ID, h.inst.Master.MasterTelegramID, text, &kb)
 	}
 }
 

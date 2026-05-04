@@ -108,25 +108,19 @@ func (r *ClientRepo) GetAllForBroadcast(ctx context.Context, masterID int, inact
 	defer cancel()
 
 	rows, err := r.db.Query(ctx, `
-	SELECT c.id, c.master_id, c.telegram_id, c.telegram_username,
-	       COALESCE(c.name,''), COALESCE(c.phone,''),
-	       c.consent_given, c.consent_given_at,
-	       c.no_broadcast, c.is_blocked, c.created_at
-	FROM clients c
-	LEFT JOIN (
-		SELECT client_id, MAX(starts_at) AS last_visit
-		FROM bookings
-		WHERE status = 'completed'
-		GROUP BY client_id
-	) b ON b.client_id = c.id
-	WHERE c.master_id = $1
-	  AND c.consent_given = TRUE
-	  AND c.no_broadcast = FALSE
-	  AND c.is_blocked = FALSE
-	  AND (
-	    b.last_visit IS NULL
-	    OR b.last_visit < $2
-	  )
+    SELECT c.id, c.master_id, c.telegram_id, c.telegram_username,
+           COALESCE(c.name,''), COALESCE(c.phone,''),
+           c.consent_given, c.consent_given_at,
+           c.no_broadcast, c.is_blocked, c.created_at
+    FROM clients c
+    WHERE c.master_id = $1
+      AND c.consent_given = TRUE
+      AND c.no_broadcast = FALSE
+      AND c.is_blocked = FALSE
+      AND (
+        c.last_visit_at IS NULL
+        OR c.last_visit_at < $2
+      )
 `, masterID, inactiveSince)
 	if err != nil {
 		return nil, err

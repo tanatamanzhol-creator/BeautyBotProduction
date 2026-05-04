@@ -382,6 +382,17 @@ func (h *Handler) showBookingConfirmation(ctx context.Context, chatID int64, use
 		priceStr = "от " + priceStr
 	}
 
+	// Получаем свежие данные мастера
+	master, err := h.repos.Master.GetByID(ctx, h.inst.Master.ID)
+	if err != nil {
+		master = h.inst.Master
+	}
+
+	prepaymentText := ""
+	if master.PrepaymentEnabled && master.PrepaymentAmount > 0 {
+		prepaymentText = fmt.Sprintf("\n\n💳 После подтверждения мастером потребуется предоплата <b>%d ₸</b>", master.PrepaymentAmount)
+	}
+
 	text := fmt.Sprintf(
 		"Проверьте и подтвердите запись ✅\n\n"+
 			"Изменить или отменить запись можно за %d часов до визита ⚠️\n\n"+
@@ -390,13 +401,14 @@ func (h *Handler) showBookingConfirmation(ctx context.Context, chatID int64, use
 			"💅 %s\n"+
 			"📅 %s\n"+
 			"⏰ %s (%s)\n"+
-			"💰 %s",
-		h.inst.Master.CancelLimitHours,
+			"💰 %s%s",
+		master.CancelLimitHours,
 		client.Name, client.Phone,
 		svc.Name,
 		formatDateFull(startsAt),
 		startsAt.Format("15:04"), formatDuration(svc.DurationMin),
 		priceStr,
+		prepaymentText,
 	)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -406,7 +418,6 @@ func (h *Handler) showBookingConfirmation(ctx context.Context, chatID int64, use
 		),
 	)
 
-	// Remove reply keyboard
 	removeKb := tgbotapi.NewRemoveKeyboard(true)
 	rm := tgbotapi.NewMessage(chatID, "⏳")
 	rm.ReplyMarkup = removeKb

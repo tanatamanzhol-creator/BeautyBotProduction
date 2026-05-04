@@ -382,6 +382,7 @@ func (h *Handler) handleBroadcastMessage(ctx context.Context, msg *tgbotapi.Mess
 	}
 
 	session.BroadcastText = text
+	session.Step = "" // сбрасываем шаг
 	h.inst.SetSession(msg.From.ID, session)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -750,6 +751,7 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 	case data == "broadcast_send":
 		session := h.inst.GetSession(userID)
 		if session.BroadcastText == "" {
+			h.inst.SetSession(userID, session)
 			h.inst.SendMessage(chatID, "Текст рассылки не найден. Начните заново.")
 			return
 		}

@@ -40,6 +40,7 @@ type Notifier interface {
 	NotifyClientCancelledByMaster(masterID int, booking *models.Booking)
 	NotifyMasterClientCancelled(masterID int, masterTelegramID int64, booking *models.Booking, reason string)
 	NotifyMasterNewReview(masterID int, masterTelegramID int64, clientName, serviceName, text string)
+	SendToClient(masterID int, clientTelegramID int64, text string, keyboard *tgbotapi.InlineKeyboardMarkup) error
 }
 
 // Session helpers

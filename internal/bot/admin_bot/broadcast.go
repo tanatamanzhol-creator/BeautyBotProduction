@@ -50,7 +50,7 @@ func (h *Handler) executeBroadcast(ctx context.Context, chatID int64, userID int
 		msg.ReplyMarkup = keyboard
 
 		// Get client bot for this master
-		_, err := h.inst.API.Send(msg)
+		err := h.inst.Notifier.SendToClient(h.inst.Master.ID, client.TelegramID, personalText, &keyboard)
 		if err != nil {
 			failed++
 			// Mark as blocked if error contains "blocked"

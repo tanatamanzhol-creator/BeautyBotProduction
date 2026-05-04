@@ -287,3 +287,17 @@ func formatDate(t time.Time) string {
 		"июля", "августа", "сентября", "октября", "ноября", "декабря"}
 	return fmt.Sprintf("%d %s", t.Day(), months[t.Month()])
 }
+
+func (m *Manager) SendToClient(masterID int, clientTelegramID int64, text string, keyboard *tgbotapi.InlineKeyboardMarkup) error {
+	inst := m.GetClientBot(masterID)
+	if inst == nil {
+		return fmt.Errorf("client bot not found for master %d", masterID)
+	}
+	msg := tgbotapi.NewMessage(clientTelegramID, text)
+	msg.ParseMode = "HTML"
+	if keyboard != nil {
+		msg.ReplyMarkup = keyboard
+	}
+	_, err := inst.API.Send(msg)
+	return err
+}

@@ -455,7 +455,7 @@ func (r *BookingRepo) GetPendingPrepayment(ctx context.Context, before time.Time
 		FROM bookings b
 		JOIN clients c ON c.id = b.client_id
 		JOIN services s ON s.id = b.service_id
-		WHERE b.prepayment_status='pending'
+		WHERE b.status = 'awaiting_prepayment'
 		  AND b.created_at < $1
 	`, before)
 	if err != nil {
@@ -463,4 +463,14 @@ func (r *BookingRepo) GetPendingPrepayment(ctx context.Context, before time.Time
 	}
 	defer rows.Close()
 	return scanBookings(rows)
+}
+
+func (r *BookingRepo) SetAwaitingPrepayment(ctx context.Context, id int) error {
+	ctx, cancel := db.NewContext(ctx)
+	defer cancel()
+
+	_, err := r.db.Exec(ctx, `
+		UPDATE bookings SET status='awaiting_prepayment' WHERE id=$1
+	`, id)
+	return err
 }

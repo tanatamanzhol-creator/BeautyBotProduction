@@ -127,12 +127,13 @@ type Review struct {
 
 // Booking statuses
 const (
-	StatusPending           = "pending"
-	StatusConfirmed         = "confirmed"
-	StatusCancelledByClient = "cancelled_by_client"
-	StatusCancelledByMaster = "cancelled_by_master"
-	StatusCompleted         = "completed"
-	StatusExpired           = "expired"
+	StatusPending            = "pending"
+	StatusAwaitingPrepayment = "awaiting_prepayment"
+	StatusConfirmed          = "confirmed"
+	StatusCancelledByClient  = "cancelled_by_client"
+	StatusCancelledByMaster  = "cancelled_by_master"
+	StatusCompleted          = "completed"
+	StatusExpired            = "expired"
 )
 
 func IsActiveStatus(status string) bool {

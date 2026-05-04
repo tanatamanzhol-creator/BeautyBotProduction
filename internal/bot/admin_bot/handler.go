@@ -793,14 +793,41 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 
 	case strings.HasPrefix(data, "prepayment_confirm_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "prepayment_confirm_"))
+
+		// Меняем статус записи на confirmed
+		h.repos.Booking.Confirm(ctx, bookingID, "master")
 		h.repos.Booking.UpdatePrepaymentStatus(ctx, bookingID, "confirmed")
+
 		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
 		if err != nil {
 			return
 		}
-		// Notify client
-		text := "✅ Предоплата подтверждена! Ваша запись закреплена."
-		h.inst.Notifier.SendToClient(h.inst.Master.ID, booking.ClientTelegramID, text, nil)
+
+		// Уведомляем клиента с адресом и напоминанием
+		master := h.inst.Master
+		addr := ""
+		if master.Address != "" {
+			addr = "\n📍 " + master.Address
+		}
+		durationUntil := time.Until(booking.StartsAt)
+		reminderText := ""
+		if durationUntil > 24*time.Hour {
+			reminderText = "\n\n⏰ Напомним за 24 часа 🔔"
+		} else if durationUntil > 2*time.Hour {
+			reminderText = "\n\n⏰ Напомним за 2 часа 🔔"
+		} else {
+			reminderText = "\n\n⏰ Напомним перед записью 🔔"
+		}
+		clientText := fmt.Sprintf(
+			"✅ Предоплата подтверждена! Запись закреплена.\n\n"+
+				"💅 %s\n📅 %s — %s%s%s\n\nЖдём вас!",
+			booking.ServiceName,
+			formatDate(booking.StartsAt),
+			booking.StartsAt.Format("15:04"),
+			addr,
+			reminderText,
+		)
+		h.inst.Notifier.SendToClient(h.inst.Master.ID, booking.ClientTelegramID, clientText, nil)
 
 		newText := cb.Message.Text + "\n\n✅ Оплата подтверждена"
 		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID, newText)
@@ -810,14 +837,28 @@ func (h *Handler) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery
 
 	case strings.HasPrefix(data, "prepayment_reject_"):
 		bookingID, _ := strconv.Atoi(strings.TrimPrefix(data, "prepayment_reject_"))
-		h.repos.Booking.UpdatePrepaymentStatus(ctx, bookingID, "not_received")
+
 		h.repos.Booking.Cancel(ctx, bookingID, models.StatusCancelledByMaster, "Предоплата не получена")
+		h.repos.Booking.UpdatePrepaymentStatus(ctx, bookingID, "not_received")
+
 		booking, err := h.repos.Booking.GetByID(ctx, bookingID)
 		if err != nil {
 			return
 		}
-		text := "❌ Предоплата не подтверждена. Запись отменена."
-		h.inst.Notifier.SendToClient(h.inst.Master.ID, booking.ClientTelegramID, text, nil)
+
+		kb := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("📅 Записаться снова", "booking_start"),
+			),
+		)
+		clientText := fmt.Sprintf(
+			"❌ Предоплата не подтверждена. Запись отменена.\n\n"+
+				"💅 %s\n📅 %s — %s\n\nВы можете записаться снова.",
+			booking.ServiceName,
+			formatDate(booking.StartsAt),
+			booking.StartsAt.Format("15:04"),
+		)
+		h.inst.Notifier.SendToClient(h.inst.Master.ID, booking.ClientTelegramID, clientText, &kb)
 
 		newText := cb.Message.Text + "\n\n❌ Оплата не получена, запись отменена"
 		edit := tgbotapi.NewEditMessageText(chatID, cb.Message.MessageID, newText)
@@ -880,18 +921,18 @@ func (h *Handler) handleClientsFiltered(ctx context.Context, chatID int64, filte
 }
 
 func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.Time, bookings []*models.Booking) {
-	// Сортируем по времени
 	sort.Slice(bookings, func(i, j int) bool {
 		return bookings[i].StartsAt.Before(bookings[j].StartsAt)
 	})
 
-	// Группируем по статусу
-	var confirmed, completed, pending, cancelled []*models.Booking
+	var confirmed, completed, pending, cancelled, awaitingPrepayment []*models.Booking
 	var revenue int
 	for _, b := range bookings {
 		switch b.Status {
 		case models.StatusPending:
 			pending = append(pending, b)
+		case models.StatusAwaitingPrepayment:
+			awaitingPrepayment = append(awaitingPrepayment, b)
 		case models.StatusConfirmed:
 			confirmed = append(confirmed, b)
 		case models.StatusCompleted:
@@ -902,10 +943,10 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		}
 	}
 
-	// Сводка
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("<b>📅 %s</b>\n\n", formatDate(date)))
 	sb.WriteString(fmt.Sprintf("✅ Подтверждено: <b>%d</b>\n", len(confirmed)))
+	sb.WriteString(fmt.Sprintf("💳 Ожидают предоплаты: <b>%d</b>\n", len(awaitingPrepayment)))
 	sb.WriteString(fmt.Sprintf("🏁 Завершено: <b>%d</b>\n", len(completed)))
 	sb.WriteString(fmt.Sprintf("⏳ Ожидают подтверждения: <b>%d</b>\n", len(pending)))
 	sb.WriteString(fmt.Sprintf("❌ Отменено: <b>%d</b>\n", len(cancelled)))
@@ -913,7 +954,6 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		sb.WriteString(fmt.Sprintf("\n💰 Выручка: <b>%d ₸</b>\n", revenue))
 	}
 
-	// Навигация и кнопки разделов — будут в конце
 	navRows := [][]tgbotapi.InlineKeyboardButton{
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("‹ Вчера", fmt.Sprintf("sched_day_%s", date.AddDate(0, 0, -1).Format("2006-01-02"))),
@@ -950,10 +990,9 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		return
 	}
 
-	// 1. Отправляем сводку — без кнопок
 	h.inst.SendMessage(chatID, sb.String())
 
-	// 2. Подтверждённые — каждая отдельным сообщением с кнопками
+	// Подтверждённые
 	for i, b := range confirmed {
 		endTime := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
 		text := fmt.Sprintf(
@@ -973,7 +1012,26 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(btnRow))
 	}
 
-	// 3. Завершённые — одним списком
+	// Ожидают предоплаты
+	for i, b := range awaitingPrepayment {
+		endTime := b.StartsAt.Add(time.Duration(b.ServiceDurationMin) * time.Minute)
+		text := fmt.Sprintf(
+			"💳 <b>%d. %s–%s</b> · %s\n💅 %s\n📱 %s\n💰 %d ₸\n⏳ Ожидает предоплаты",
+			i+1,
+			b.StartsAt.Format("15:04"),
+			endTime.Format("15:04"),
+			b.ClientName,
+			b.ServiceName,
+			b.ClientPhone,
+			b.ServicePrice,
+		)
+		btnRow := tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("master_cancel_%d", b.ID)),
+		)
+		h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(btnRow))
+	}
+
+	// Завершённые
 	if len(completed) > 0 {
 		var compSb strings.Builder
 		compSb.WriteString("🏁 <b>Завершённые:</b>\n\n")
@@ -990,7 +1048,6 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 		h.inst.SendMessage(chatID, compSb.String())
 	}
 
-	// 4. Кнопки отменённых и навигация по датам
 	h.inst.SendWithInlineKeyboard(chatID, "🗓 Навигация", bottomKeyboard)
 }
 

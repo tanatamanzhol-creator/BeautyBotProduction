@@ -181,7 +181,7 @@ func (m *Manager) NotifyClientConfirmed(masterID int, booking *models.Booking) {
 
 	// Если предоплата включена — запрашиваем оплату вместо подтверждения
 	if master.PrepaymentEnabled {
-		m.repos.Booking.UpdatePrepaymentStatus(ctx, booking.ID, "pending")
+		m.repos.Booking.SetAwaitingPrepayment(ctx, booking.ID)
 
 		text := fmt.Sprintf(
 			"Мастер подтвердил запись! ✅\n\n"+

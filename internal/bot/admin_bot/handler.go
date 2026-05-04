@@ -1026,7 +1026,8 @@ func (h *Handler) showDaySchedule(ctx context.Context, chatID int64, date time.T
 			b.ServicePrice,
 		)
 		btnRow := tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❌ Отменить", fmt.Sprintf("master_cancel_%d", b.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("✅ Оплата получена", fmt.Sprintf("prepayment_confirm_%d", b.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("❌ Не получена", fmt.Sprintf("prepayment_reject_%d", b.ID)),
 		)
 		h.inst.SendWithInlineKeyboard(chatID, text, tgbotapi.NewInlineKeyboardMarkup(btnRow))
 	}
